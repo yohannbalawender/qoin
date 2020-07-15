@@ -4,3 +4,4 @@ src/.blockchain
 src/.users
 node_modules
 *.swp
+*.pyc
