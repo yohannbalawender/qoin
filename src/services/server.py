@@ -97,6 +97,8 @@ class BlockChainServer(Leader):
             data = json.load(json_file)
             self._restore_blockchain_from_json(data)
 
+        self.service.initialize()
+
     def save_blockchain(self, conf):
         def set_internal_dir(path):
             os.mkdir(path)
@@ -125,12 +127,154 @@ class BlockChainService(rpyc.Service):
     # Shared instance with the server
     BLOCK_CHAIN = []
 
+    USERS = {}
+
+    def initialize(self):
+        if MASTER_IDENTIFIER not in self.USERS:
+            self._create_master_user()
+
+        if len(self.BLOCK_CHAIN) == 0:
+            self.BLOCK_CHAIN.append(self._create_genesis_block())
+
+    def _create_master_user(self):
+        sha_passwd = hashlib.sha256()
+
+        self.USERS[MASTER_IDENTIFIER] = User('master', MASTER_IDENTIFIER,
+                                             sha_passwd.hexdigest(),
+                                             admin=True)
+
+    def _create_genesis_block(self):
+        master_user = self.USERS[MASTER_IDENTIFIER]
+        tx = Transaction(master_user,
+                         master_user,
+                         conf['defaultGenesisAmount'], time.time())
+        block = Block(0, time.time(), None, [tx])
+        nonce, hash = block.gen_hash()
+        block.set_hash(nonce, hash)
+        return block
+
     def set_blockchain(self, BLOCK_CHAIN):
         """
             Store the blockchain reference
         """
 
         self.BLOCK_CHAIN = BLOCK_CHAIN
+
+    # Transaction {{{
+
+    # def handle_transaction(self, author, recipient, amount):
+    #     if recipient not in self.USERS:
+    #         return {'code': 400, 'message': 'Unknown user'}
+
+    #     if get_account_history(author)['balance'] < amount:
+    #         return {'code': 400, 'message': 'Unsufficient balance'}
+
+    #     res = self.send_coin(USERS[author], USERS[recipient], amount)
+
+    #     if res:
+    #         return {'code': 200,
+    #                 'message': 'Transaction will be added to block'}
+    #     else:
+    #         return {'code': 400,
+    #                 'message': 'Unable to process the transaction'}
+
+    # }}}
+    # Users {{{
+
+    def _authenticate_master(self, priv):
+        if priv != self.USERS[MASTER_IDENTIFIER].private_key:
+            return False, 'Authentication failed', 400
+
+        return True
+
+    def is_user_authenticated(self, token):
+        global SECRET_KEY
+
+        cipher = Fernet(SECRET_KEY)
+        ts = cipher.extract_timestamp(token)
+        now = int(time.time())
+
+        if (now - ts) > DEFAULT_EXPIRY:
+            return False, 'Authentication expired', 400
+
+        b64 = cipher.decrypt(token)
+        plain = base64.b64decode(b64)
+        _json = json.loads(plain)
+
+        user = self.USERS[_json['email']]
+
+        if user is None:
+            return False, 'Unknown session', 400
+
+        if user.is_authenticated(_json['token']):
+            return user
+        else:
+            return False, 'Fail to authenticate', 400
+
+    def _create_user(self, name, email, passwd, admin):
+        if email not in self.USERS:
+            sha_passwd = hashlib.sha256()
+            sha_passwd.update(passwd.encode('utf-8'))
+            user = User(name, email, sha_passwd.hexdigest(), admin=admin)
+            self.USERS[email] = user
+
+            return True
+
+        return False
+
+    def exposed_master_create_user(self, priv, **kwargs):
+        res, err, code = self._authenticate_master(priv)
+
+        if not res:
+            return {'message': err}, code
+
+        if self._create_user(**kwargs):
+            return {'message': 'User successfully created'}, 200
+        else:
+            return {'message': 'Failed to create the user'}, 400
+
+    def exposed_declare_service(self, token, role):
+        res, err, code = self.is_user_authenticated(token)
+
+        if not res:
+            return {'message': err}, code
+
+        user = res
+
+        service = user.declare_service(role)
+
+        return {'message': 'Service declared successfully',
+                'serviceKey':  service['key']}, 200
+
+    def exposed_list_users(self, token):
+        res, err, code = self.is_user_authenticated(token)
+
+        if not res:
+            return {'message': err}, code
+
+        user = res
+
+        users = [{'name': self.USERS[k].name, 'email': self.USERS[k].email}
+                 for k in self.USERS if self.USERS[k].email != user.email]
+
+        return {'users': users}, 200
+
+    def exposed_service_refresh_key(self, token, key):
+        res, err, code = self.is_user_authenticated(token)
+
+        if not res:
+            return {'message': err}, code
+
+        user = res
+
+        new_key, err = user.service_refresh_key(key)
+
+        if err:
+            return {'message': 'Could not change the service key'}, 400
+
+        return {'key': new_key}, 200
+
+    # }}}
 
 
 if __name__ == '__main__':

@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 import ecdsa
 import base64
 import time

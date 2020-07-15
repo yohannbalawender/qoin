@@ -37,7 +37,7 @@ def random_hex(length):
     return ''.join(random.choice(string.hexdigits) for i in range(length))
 
 
-class User:
+class User(object):
     def __init__(self, name, email, passwd,
                  priv=None, pub=None,
                  salt='', services=[], tx_list=[],
