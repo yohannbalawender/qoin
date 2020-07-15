@@ -15,6 +15,11 @@ $(document).ready(() => {
         const formatDate = (date) => {
             let month = date.getMonth() + 1
             let minute = date.getMinutes()
+            let day = date.getDate()
+
+            if (day < 10) {
+                day = '0' + day
+            }
 
             if (month < 10) {
                 month = '0' + month
@@ -24,7 +29,7 @@ $(document).ready(() => {
                 minute = '0' + minute
             }
 
-            return date.getDate() + '/' + month + '/' + date.getFullYear() + ' ' +
+            return day + '/' + month + '/' + date.getFullYear() + ' ' +
                    date.getHours() + ':' + minute
         }
 

@@ -1,55 +1,20 @@
 $(document).ready(() => {
     $('#submit-tr').click((e) => {
-        /* const $sender = $('.sender')
-        const $recipient = $('.recipient')
-        const $amount = $('.amount')
-
-        const sender = $sender.find('input').val()
-        const recipient = $recipient.find('input').val()
-        const amount = parseFloat($amount.find('input').val(), 10) */
-
-        const recipient = $('#recipient').val()
-        const amount = $('#amount').val()
+        const $recipient = $('#recipient')
+        const $amountGroup = $('#amount-grp')
+        const $amount = $('#amount')
+        const recipient = $recipient.val()
+        const amount = $amount.val()
 
         let valid = true
 
-        /* $sender.removeClass('has-error')
-        $recipient.removeClass('has-error')
-        $amount.removeClass('has-error')
-
-        $sender.find('.form-input-hint').addClass('hidden')
-        $recipient.find('.form-input-hint').addClass('hidden')
-        $amount.find('.form-input-hint').addClass('hidden') */
-
-        /* if (!sender) {
-            $sender.addClass('has-error')
-
-            $sender.find('.form-input-hint')
-                .removeClass('hidden')
-                .html('Sender cannot be empty')
-
-            valid = false
-        }
-
-        if (!recipient) {
-            $recipient.addClass('has-error')
-
-            $recipient.find('.form-input-hint')
-                .removeClass('hidden')
-                .html('Recipient cannot be empty')
-
-            valid = false
-        }
+        $amountGroup.removeClass('has-danger')
 
         if (amount <= 0) {
-            $amount.addClass('has-error')
-
-            $amount.find('.form-input-hint')
-                .removeClass('hidden')
-                .html('Amount cannot be null or negative')
+            $amountGroup.addClass('has-danger')
 
             valid = false
-        } */
+        }
 
         e.preventDefault()
 
@@ -58,6 +23,9 @@ $(document).ready(() => {
         }
 
         $.post('/transaction/new', { recipient, amount }).done(() => {
+            window.notification.show('success', { msg: 'Transaction submitted' , dismiss: true })
+
+            $amount.val('')
         })
     })
 
@@ -144,3 +112,113 @@ $(document).ready(() => {
         })
     }
 })
+
+var Notification = function() {
+}
+
+Notification.prototype = {
+    success: function(options) {
+        this.show('success', options)
+    },
+
+    info: function(options) {
+        this.show('info', options)
+    },
+
+    warning: function(options) {
+        this.show('warning', options)
+    },
+    
+    danger: function(options) {
+        this.show('danger', options)
+    },
+
+    renderMessages: function(msg) {
+        if (typeof msg === 'string') {
+            return '<p>' + msg + '</p>'
+        } else
+        if (typeof msg === 'object' && msg.length !== undefined) {
+            return msg.map((m) => {
+                return '<p>' + m + '</p>'
+            })
+        }
+    },
+
+    show: function(type, options) {
+        var $ctn = $('.notification-ctn')
+
+        if (!$ctn.length) {
+            $ctn = $(
+              '<div class="notification-ctn">' +
+              '  <div class="notification-action">' +
+              '    <div class="btn-push btn-push-default">' +
+              '      <a href="#" title="Dismiss all" class="dismiss-all">' +
+              '        <span class="inner">' +
+              '          <i class="ti-close"></i>' +
+              '        </span>' +
+              '      </a>' +
+              '    </div>' +
+              '  </div>' +
+              '</div>'
+            );
+
+            $ctn.find('.dismiss-all').click(this.onDismissAll.bind(this))
+
+            this.$el = $ctn
+
+            $('body').append($ctn)
+        }
+
+        var classType = 'alert alert-' + type
+        var $el = $(
+          '<div class="notification">' +
+          '  <div class="' + classType + '">' +
+          '    <a href="#" class="dismiss">' +
+          '      <span class="ti-close"></span>' +
+          '    </a>' +
+              this.renderMessages(options.msg) +
+          '  </div>' +
+          '</div>'
+        );
+
+        if (type !== 'danger' && type !== 'warning') {
+            _.delay(() => {
+                $el.fadeOut(400, () => {
+                    this.remove($el)
+                })
+            }, 5000)
+        }
+
+        $el.fadeIn()
+
+        $el.find('.dismiss').click(() => {
+            this.remove($el)
+        })
+
+        $ctn.show().append($el)
+
+        this.toggleMultiple()
+    },
+
+    onDismissAll: function() {
+        this.$el.find('.notification').each((i, el) => {
+            this.remove($(el))
+        })
+    },
+
+    remove: function($el) {
+        $el.remove()
+
+        this.$el.toggle(!!this.$el.find('.notification').length)
+
+        this.toggleMultiple()
+    },
+
+    toggleMultiple: function() {
+        this.$el.toggleClass('multiple', this.$el.find('.notification').length > 1)
+    }
+}
+
+var notification = new Notification()
+
+window.notification = notification
