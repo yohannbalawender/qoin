@@ -1,9 +1,4 @@
 #!/usr/bin/python
-
-from block import Block
-from transaction import Transaction
-from user import User, AuthenticationError
-from utils import load_configuration_file
 import time
 
 import json
@@ -24,6 +19,11 @@ from cryptography.fernet import Fernet
 import rpyc
 from rpyc.utils.server import ThreadedServer
 
+from src.block import Block
+from src.transaction import Transaction
+from src.user import User, AuthenticationError
+from src.utils import load_configuration_file
+
 logger = logging.getLogger('blockchain')
 hdlr = logging.FileHandler('log/blockchain.log')
 
@@ -40,6 +40,7 @@ USERS = {}
 SERVICES = {}
 PENDING_BLOCKS = {}
 SECRET_KEY = None
+
 
 def init(conf):
     global SECRET_KEY
@@ -80,6 +81,7 @@ def create_user(name, email, passwd):
 
     return False
 
+
 def restore_block_chain_from_json(data):
     prev_hash = None
 
@@ -94,41 +96,46 @@ def restore_block_chain_from_json(data):
             tx.signature = base64.b64decode(s_tx['signature'])
             tx_list.append(tx)
 
-        block.index     = s_block['index']
-        block.ts        = s_block['ts']
+        block.index = s_block['index']
+        block.ts = s_block['ts']
         block.prev_hash = s_block['prev_hash']
-        block.tx_list   = tx_list
-        block.nonce     = s_block['nonce']
-        block.hash      = s_block['hash']
+        block.tx_list = tx_list
+        block.nonce = s_block['nonce']
+        block.hash = s_block['hash']
 
         # Checks
         if not block.check_validity():
-            raise Exception('Cannot restore the blockchain because a signature is invalid')
+            raise Exception('Cannot restore the blockchain because a \
+                             signature is invalid')
 
         if s_block['index'] > 0:
             if s_block['prev_hash'] != prev_hash:
-                raise Exception('Cannot restore the blockchain because hash is invalid')
+                raise Exception('Cannot restore the blockchain because \
+                                 hash is invalid')
 
         print block
         BLOCK_CHAIN.append(block)
 
         prev_hash = s_block['hash']
 
+
 def restore_users_from_json(data):
     for s_user in data:
         user = User(s_user['name'], s_user['email'], s_user['passwd'],
-                    priv = base64.b64decode(s_user['private_key']),
-                    pub = base64.b64decode(s_user['public_key']),
-                    salt = s_user['salt'], services = s_user['services'])
+                    priv=base64.b64decode(s_user['private_key']),
+                    pub=base64.b64decode(s_user['public_key']),
+                    salt=s_user['salt'], services=s_user['services'])
         print user
         USERS[user.email] = user
     print '='*20
+
 
 def restore_services_from_json(data):
     i = 0
 
     for s_service in data:
-        SERVICES[(s_service['host'], s_service['port'], s_service['role'], s_service['owner'], s_service['key'])] = 1
+        SERVICES[(s_service['host'], s_service['port'], s_service['role'],
+                  s_service['owner'], s_service['key'])] = 1
         i += 1
 
     print '%d services restored' % i
@@ -142,6 +149,7 @@ def load_block_chain():
         data = json.load(json_file)
         restore_block_chain_from_json(data)
 
+
 def load_users():
     filepath = conf['usersDir'] + '/dump.json'
     if not os.path.isfile(filepath):
@@ -151,6 +159,7 @@ def load_users():
         data = json.load(json_file)
         restore_users_from_json(data)
 
+
 def load_services():
     filepath = conf['servicesDir'] + '/dump.json'
     if not os.path.isfile(filepath):
@@ -159,6 +168,7 @@ def load_services():
     with open(filepath) as json_file:
         data = json.load(json_file)
         restore_services_from_json(data)
+
 
 def save_block_chain():
     if not os.path.exists(conf['blockchainDir']):
@@ -170,7 +180,8 @@ def save_block_chain():
         blocks.append(block.serialize())
 
     with open(conf['blockchainDir'] + '/dump.json', 'w') as outfile:
-            json.dump(blocks, outfile)
+        json.dump(blocks, outfile)
+
 
 def save_users():
     if not os.path.exists(conf['usersDir']):
@@ -191,10 +202,12 @@ def save_services():
     services = []
 
     for s in SERVICES:
-        services.append({ 'host': s[0], 'port': s[1], 'role': s[2], 'owner': s[3], 'key': s[4] })
+        services.append({'host': s[0], 'port': s[1], 'role': s[2],
+                         'owner': s[3], 'key': s[4]})
 
     with open(conf['servicesDir'] + '/dump.json', 'w') as outfile:
         json.dump(services, outfile)
+
 
 def signal_handler(sig, frame):
     save_block_chain()
@@ -202,13 +215,15 @@ def signal_handler(sig, frame):
     save_services()
     sys.exit(0)
 
+
 def get_user_from_public_key(pub):
     for k in USERS:
         if USERS[k].public_key == pub:
             return USERS[k]
     return None
 
-def is_user_authenticated(token, err = []):
+
+def is_user_authenticated(token, err=[]):
     cipher = Fernet(SECRET_KEY)
     ts = cipher.extract_timestamp(token)
     now = int(time.time())
@@ -235,6 +250,7 @@ def is_user_authenticated(token, err = []):
         err.append({'code': 400, 'message': 'Fail to authenticate'})
         return None
 
+
 def get_account_history(user_email):
     balance = 0
     history = OrderedDict()
@@ -260,9 +276,10 @@ def get_account_history(user_email):
                     'email': tx_user.email,
                     'label': tx.label
                 }
-    return { 'history': history, 'balance': balance }
+    return {'history': history, 'balance': balance}
 
 ###########################################################################
+
 
 class BlockChainService(rpyc.Service):
     def on_connect(self, conn):
@@ -298,23 +315,27 @@ class BlockChainService(rpyc.Service):
 
     def handle_transaction(self, author, recipient, amount):
         if recipient not in USERS:
-            return { 'code': 400, 'message': 'Unknown user' }
+            return {'code': 400, 'message': 'Unknown user'}
 
         if get_account_history(author)['balance'] < amount:
-            return { 'code': 400, 'message': 'Unsufficient balance' }
+            return {'code': 400, 'message': 'Unsufficient balance'}
 
-        res = self.send_coin(USERS[author], USERS[recipient], amount, 'Transaction')
+        res = self.send_coin(USERS[author], USERS[recipient], amount,
+                             'Transaction')
 
         if res:
-            return { 'code': 200, 'message': 'Transaction will be added to block' }
+            return {'code': 200,
+                    'message': 'Transaction will be added to block'}
         else:
-            return { 'code': 400, 'message': 'Unable to process the transaction' }
+            return {'code': 400,
+                    'message': 'Unable to process the transaction'}
 
     def exposed_master_credit(self, priv, recipient, amount):
         email = 'master@intersec.com'
 
         if priv != USERS[email].private_key:
-            return { 'code': 400, 'message': 'Unable to process the transaction' }
+            return {'code': 400,
+                    'message': 'Unable to process the transaction'}
 
         return self.handle_transaction(email, recipient, amount)
 
@@ -338,7 +359,7 @@ class BlockChainService(rpyc.Service):
 
         history = get_account_history(user.email)['history']
 
-        return { 'code': 200, 'history': history }
+        return {'code': 200, 'history': history}
 
     def exposed_get_account(self, token):
         logger.debug('Request account for token %s' % (token))
@@ -351,7 +372,7 @@ class BlockChainService(rpyc.Service):
 
         account = get_account_history(user.email)
 
-        return { 'code': 200, 'account': account }
+        return {'code': 200, 'account': account}
 
     def exposed_get_balance(self, token):
         err = []
@@ -362,11 +383,11 @@ class BlockChainService(rpyc.Service):
 
         balance = get_account_history(user.email)['balance']
 
-        return { 'code': 200, 'balance': balance }
+        return {'code': 200, 'balance': balance}
 
     def exposed_on_gerrit_notify(self, data):
         if data['email'] not in USERS:
-            return { 'code': 400, 'message': 'Unknown user' }
+            return {'code': 400, 'message': 'Unknown user'}
 
         data_reward = self.get_data_reward(data)
 
@@ -383,19 +404,22 @@ class BlockChainService(rpyc.Service):
                 break
 
         try:
-            conn = rpyc.connect(host = qwinner[0], port = qwinner[1], config = { 'allow_all_attrs': True })
-        except:
+            conn = rpyc.connect(host=qwinner[0], port=qwinner[1],
+                                config={'allow_all_attrs': True})
+        except Exception:
             print 'Connection lost with qwinner %s' % (qwinner.__str__())
             return
 
         resp = conn.root.compute_reward(data)
 
-        return { 'code': 200, 'rewarded': data['email'], 'amount': resp['value'] }
+        return {'code': 200, 'rewarded': data['email'],
+                'amount': resp['value']}
 
     def send_miner_compute(self, miner, block):
         try:
-            conn = rpyc.connect(host = miner[0], port = miner[1], config = { 'allow_all_attrs': True })
-        except:
+            conn = rpyc.connect(host=miner[0], port=miner[1],
+                                config={'allow_all_attrs': True})
+        except Exception:
             SERVICES.pop(miner)
             print 'Connection lost with miner %s' % (miner.__str__())
             return
@@ -415,8 +439,8 @@ class BlockChainService(rpyc.Service):
             miner_key = (miner[0], miner[1])
             block = pending[miner_key]
 
-            # TODO verif
-            if not block.check_hash_validity(s_block['nonce'], s_block['hash']):
+            if not block.check_hash_validity(s_block['nonce'],
+                                             s_block['hash']):
                 print 'Miner %s sent an invalid hash' % (miner.__str__())
                 PENDING_BLOCKS[key] = pending
                 return
@@ -439,11 +463,13 @@ class BlockChainService(rpyc.Service):
                 cnt += 1
 
         if cnt == 0:
-            logger.error('No miner service available to procede the transaction. Transaction is lost')
+            logger.error('No miner service available to procede the \
+                          transaction. Transaction is lost')
             return False
 
         pending_block = {}
-        PENDING_BLOCKS[(block.index, block.ts, block.prev_hash)] = pending_block
+        PENDING_BLOCKS[(block.index, block.ts, block.prev_hash)] = \
+            pending_block
 
         for m in miners:
             miner_block = deepcopy(block)
@@ -455,7 +481,7 @@ class BlockChainService(rpyc.Service):
                 try:
                     # Add reward for a user, which has a service declared
                     self.add_reward(m, miner_block)
-                except:
+                except Exception:
                     pass
 
             thr = threading.Thread(target=self.send_miner_compute,
@@ -507,7 +533,7 @@ class BlockChainService(rpyc.Service):
                 break
 
         if user is None:
-            return { 'code': 400, 'message': 'Unknown user' }
+            return {'code': 400, 'message': 'Unknown user'}
 
         try:
             res = user.authenticate(passwd)
@@ -524,19 +550,22 @@ class BlockChainService(rpyc.Service):
             cipher = Fernet(SECRET_KEY)
             encrypted = cipher.encrypt(b64)
 
-            return { 'code': 201, 'message': 'Successfully authenticated', 'token': encrypted, 'email': user.email, 'name': user.name }
+            return {'code': 201, 'message': 'Successfully authenticated',
+                    'token': encrypted, 'email': user.email,
+                    'name': user.name}
         except AuthenticationError:
-            return { 'code': 400, 'message': 'Authentication failed' }
+            return {'code': 400, 'message': 'Authentication failed'}
         except Exception:
-            return { 'code': 400, 'message': 'Unknown error while trying to authenticate' }
+            return {'code': 400,
+                    'message': 'Unknown error while trying to authenticate'}
 
     def exposed_create_user(self, name, email, passwd):
         res = create_user(name, email, passwd)
 
         if res:
-            return { 'code': 200, 'message': 'User successfully created' }
+            return {'code': 200, 'message': 'User successfully created'}
 
-        return { 'code': 400, 'message': 'Failed to create user' }
+        return {'code': 400, 'message': 'Failed to create user'}
 
     def exposed_declare_service(self, token, role):
         err = []
@@ -547,8 +576,9 @@ class BlockChainService(rpyc.Service):
 
         service = user.declare_service(role)
 
-        return { 'code': 200, 'message': 'Service declared successfully',
-                 'serviceKey':  service['key'] }
+        return {'code': 200,
+                'message': 'Service declared successfully',
+                'serviceKey':  service['key']}
 
     def exposed_list_users(self, token):
         err = []
@@ -557,10 +587,10 @@ class BlockChainService(rpyc.Service):
         if err:
             return err[0]
 
-        users = [{ 'name': USERS[k].name, 'email': USERS[k].email }
+        users = [{'name': USERS[k].name, 'email': USERS[k].email}
                  for k in USERS if USERS[k].email != user.email]
 
-        return { 'code': 200, 'users': users }
+        return {'code': 200, 'users': users}
 
     # }}}
 
@@ -591,10 +621,8 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, signal_handler)
 
-    server = ThreadedServer(BlockChainService, hostname = socket.gethostname(),
-                            port = conf['port'],
-                            protocol_config = {"allow_public_attrs" : True,
-                                               "allow_pickle": True })
+    server = ThreadedServer(BlockChainService, hostname=socket.gethostname(),
+                            port=conf['port'],
+                            protocol_config={"allow_public_attrs": True,
+                                             "allow_pickle": True})
     server.start()
-
-

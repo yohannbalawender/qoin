@@ -1,8 +1,6 @@
 import ecdsa
 import base64
-import os
 import hashlib
-import time
 
 import random
 import string
@@ -16,36 +14,40 @@ formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 hdlr.setFormatter(formatter)
 logger.addHandler(hdlr)
 
+
 class AuthenticationError(Exception):
     """Basic exception class for authentication error"""
     pass
+
 
 def random_string(length):
     """ Generate random string from ASCII table """
     letters = string.ascii_letters
     return ''.join(random.choice(letters) for i in range(length))
 
+
 def random_hex(length):
     """ Generate random string from HEX digits """
     return ''.join(random.choice(string.hexdigits) for i in range(length))
 
+
 class User:
     def __init__(self, name, email, passwd,
-                 priv = None, pub = None,
-                 salt = '', services = []):
+                 priv=None, pub=None,
+                 salt='', services=[]):
         self.name = name
         self.email = email
         self.passwd = passwd
         self.salt = salt
         self.services = services
 
-        if priv == None and pub == None:
+        if priv is None and pub is None:
             sk = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
             self.private_key = sk.to_string()
-            self.public_key  = sk.get_verifying_key().to_string()
+            self.public_key = sk.get_verifying_key().to_string()
         else:
             self.private_key = priv
-            self.public_key  = pub
+            self.public_key = pub
 
     def serialize(self):
         return {
@@ -96,7 +98,7 @@ class User:
 
     def declare_service(self, role):
         key = random_hex(32)
-        service = { 'key': key, 'role': role }
+        service = {'key': key, 'role': role}
 
         self.add_user_service(service)
 

@@ -2,6 +2,7 @@ import os
 import sys
 import json
 
+
 def load_configuration_file(conf_filepath):
     conf = {}
 

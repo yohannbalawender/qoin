@@ -1,27 +1,30 @@
 import hashlib
 import ecdsa
 
+
 def has_proof_of_work(hash):
     # Number of most significant bytes that are zero.
     difficulty = 1
     return int(hash[:difficulty], 16) == 0
+
 
 def hash_block(_str):
     sha = hashlib.sha256()
     sha.update(_str.encode('utf-8'))
     return sha.hexdigest()
 
+
 class Block:
     def __init__(self, index, ts, prev_hash, tx_list):
-        self.index     = index
-        self.ts        = ts
-        self.prev_hash = prev_hash if prev_hash != None else ''
-        self.tx_list   = tx_list
-        self.nonce     = None
-        self.hash      = None
+        self.index = index
+        self.ts = ts
+        self.prev_hash = prev_hash if prev_hash is not None else ''
+        self.tx_list = tx_list
+        self.nonce = None
+        self.hash = None
 
     def __str__(self):
-        _str  = 'block: #%d : ts:%d\n' % (self.index, self.ts)
+        _str = 'block: #%d : ts:%d\n' % (self.index, self.ts)
         _str += '       prevHash:%s... hash:%s...\n' % (self.prev_hash[:5],
                                                         self.hash[:5])
         _str += '       nonce:%s\n' % (self.nonce)
@@ -72,7 +75,7 @@ class Block:
 
     def set_hash(self, nonce, hash):
         self.nonce = nonce
-        self.hash  = hash
+        self.hash = hash
 
     def gen_hash(self):
         nonce = 0

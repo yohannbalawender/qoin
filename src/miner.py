@@ -4,20 +4,15 @@ from block import Block
 from transaction import Transaction
 from utils import load_configuration_file
 
-import sys
-
-import json
 import socket
 from argparse import ArgumentParser
 import base64
-import threading
-import ecdsa
-import os
 
 import rpyc
 from rpyc.utils.server import ThreadedServer
 
 conf = {}
+
 
 class MinerServer(ThreadedServer):
     def on_connect(self, conn):
@@ -56,9 +51,10 @@ class MinerServer(ThreadedServer):
     def get_connection(self):
         try:
             return rpyc.connect(self.server_host, self.server_port,
-                                config = { 'credentials': ('foo', 'bar')  })
-        except socket.error as e:
+                                config={'credentials': ('foo', 'bar')})
+        except socket.error:
             raise Exception('Unable to connect master service')
+
 
 def get_block_obj(s_block):
     block = Block(None, None, None, None)
@@ -73,10 +69,10 @@ def get_block_obj(s_block):
 
         tx_list.append(tx)
 
-    block.index     = s_block['index']
-    block.ts        = s_block['ts']
+    block.index = s_block['index']
+    block.ts = s_block['ts']
     block.prev_hash = s_block['prev_hash']
-    block.tx_list   = tx_list
+    block.tx_list = tx_list
 
     return block
 
@@ -102,9 +98,10 @@ class MinerClient(rpyc.Service):
         nonce, hash = block.gen_hash()
         block.set_hash(nonce, hash)
 
-        return {'block' : block.serialize() }
+        return {'block': block.serialize()}
 
 ###########################################################################
+
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -114,16 +111,18 @@ if __name__ == '__main__':
     args = parser.parse_args()
     conf = load_configuration_file(args.conf)
 
-    if conf['server'] is None or conf['server']['ip'] is None \
+    if conf['server'] is None \
+        or conf['server']['ip'] is None \
         or conf['server']['port'] is None:
+
         raise 'Server must be provided in the configuration file'
 
     server_host = conf['server']['ip']
     server_port = conf['server']['port']
     client_port = conf['port']
 
-    server = MinerServer(MinerClient, hostname = socket.gethostname(),
-                         port = client_port)
+    server = MinerServer(MinerClient, hostname=socket.gethostname(),
+                         port=client_port)
 
     server.set_server_addr(server_host, server_port)
 
