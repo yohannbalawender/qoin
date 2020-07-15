@@ -333,32 +333,24 @@ class BlockChainService(rpyc.Service):
     def get_data_reward(self, data):
         # TODO: choose the right Qwinner
         qwinner = QWINNERS.keys()[0]
-        conn = rpyc.connect(host = qwinner[0], port = qwinner[1], config = { 'allow_all_attrs': True })
+
+        try:
+            conn = rpyc.connect(host = qwinner[0], port = qwinner[1], config = { 'allow_all_attrs': True })
+        except:
+            print 'Connection lost with qwinner %s' % (qwinner.__str__())
+            return
 
         resp = conn.root.compute_reward(data)
 
         return { 'code': 200, 'rewarded': data['email'], 'amount': resp['value'] }
 
-    def exposed_miner_hash_result(self, s_block):
-        key = (s_block['index'], s_block['ts'], s_block['prev_hash'])
-        if key in PENDING_BLOCKS:
-            block = PENDING_BLOCKS[key]
-
-            if not block.check_hash_validity(s_block['nonce'] , s_block['hash']):
-                #TODO: which miner ?
-                return {'code': 400, 'message': 'Miner send an invalid hash'}
-
-            block.set_hash(s_block['nonce'] , s_block['hash'])
-            print 'Solved by %s' % request.remote_addr
-            PENDING_BLOCKS.pop(key, None)
-            BLOCK_CHAIN.append(block)
-            response = {'code': 200, 'message': 'Good job!'}
-        else:
-            response = {'code': 200, 'message': 'Bad luck, block already solved'}
-        return response
-
     def send_miner_compute(self, miner, block):
-        conn = rpyc.connect(host = miner[0], port = miner[1], config = { 'allow_all_attrs': True })
+        try:
+            conn = rpyc.connect(host = miner[0], port = miner[1], config = { 'allow_all_attrs': True })
+        except:
+            MINERS.pop(miner)
+            print 'Connection lost with miner %s' % (miner.__str__())
+            return
 
         data = block.serialize()
 
