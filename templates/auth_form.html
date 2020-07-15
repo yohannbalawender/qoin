@@ -1,0 +1,39 @@
+{% include "header.html" %}
+<div class="content-wrapper">
+  <div class="row">
+    <div class="col-md-12 grid-margin">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <h4 class="font-weight-bold mb-0">Login</h4>
+        </div>
+        </div>
+      </div>
+      <div class="col-12 grid-margin stretch-card">
+        <div class="card">
+          <div class="card-body">
+            <h4 class="card-title">Please fill the form to login</h4>
+            <!--<form method="post" enctype="x-form-encoded">-->
+            <form action="/auth" method="post">
+              <div class="form-group">
+                <label for="email">Email</label>
+                <input type="text" class="form-control" aria-label="Email" id="login" placeholder="Your email" name="login" value="">
+              </div>
+              <div class="form-group">
+                <label for="pwd">Password
+                  <input type="password" class="form-control" aria-label="Password" id="pwd" placeholder="Your password" name="password" value="">
+                </label>
+              </div>
+              <div class="form-group">
+                <input type="submit" class="btn btn-primary mb-2" value="Login" id="submit-auth">
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+<script type="text/javascript" src="/static/js/jquery.js"></script>
+<script type="text/javascript" src="/static/js/app.js"></script>
+{% include "footer.html" %}
