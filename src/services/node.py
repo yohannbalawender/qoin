@@ -1,7 +1,6 @@
 #!/usr/bin/python
 
 import socket
-import logging
 import hashlib
 
 from src.utils import get_logger_by_name
@@ -29,16 +28,20 @@ class Node(ThreadedServer):
         if nb < 1:
             nb = 1
 
-        def _retry_wrapper():
+        def _retry_wrapper(nb):
             while nb:
                 try:
-                    return fn(**kwargs)
-                except BaseException:
+                    return fn(*args, **kwargs)
+                except BaseException as e:
+                    logger.warning('Exception occurred on %s (%s), '
+                                   'retrying...' % (fn, e))
+                    nb -= 1
                     pass
 
-            return None
+            logger.error('Too much exception, stop to retry')
+            raise e
 
-        return _retry_wrapper
+        return _retry_wrapper(nb)
 
 
 class Follower(Node):
@@ -83,16 +86,16 @@ class Follower(Node):
 
         logger.info('%s successfully registered' % self.node_name)
 
-        conn.close()
+        return res
 
-    def authenticate(self, owner, key):
+    def authenticate(self, token, owner, key):
         """
             A method used to authenticate a follower to the leader
         """
 
         conn = self._get_connection()
 
-        res, error = conn.root.auth_service(owner, key)
+        res, error = conn.root.auth_service(token, owner, key)
 
         if not res:
             raise BaseException('Failed to authenticate %s: %s'
@@ -163,7 +166,7 @@ class LeaderService(rpyc.Service):
         service['authenticate'] = {'owner': owner, 'key': key}
 
         logger.info('Follower %s successfully authenticated'
-                    % (service.data.__str__()))
+                    % (service['data'].__str__()))
 
         return True, 200
 

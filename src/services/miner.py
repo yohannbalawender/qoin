@@ -92,14 +92,14 @@ if __name__ == '__main__':
 
     server.set_leader_addr(leader_host, leader_port)
 
-    try:
-        credentials = conf['credentials']
+    token = server.retry(3, server.register, conf)
 
-        server.authenticate(credentials['owner'], credentials['key'])
+    try:
+        cr = conf['credentials']
+
+        server.authenticate(token, cr['owner'], cr['key'])
     except KeyError:
         pass
-
-    server.register(conf)
 
     logger.info('Miner up and running')
 
