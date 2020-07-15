@@ -73,7 +73,7 @@ $(document).ready(() => {
         $info.addClass('hidden')
         $balance.empty()
 
-        $.get('/account/get', { login }).done((resp) => {
+        $.post('/account/get', { }).done((resp) => {
             $info.removeClass('hidden')
 
             $balance.html(resp.account.balance)

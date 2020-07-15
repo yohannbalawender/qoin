@@ -2,7 +2,7 @@ $(document).ready(() => {
     const login = 'yohann.balawender@intersec.com'
     const password = 'yohann'
 
-    $.get('/account/get', { login, password }).done((resp) => {
+    $.post('/account/get', {}).done((resp) => {
         const $balance = $('#balance-amount')
 
         $balance.html(resp.account.balance)

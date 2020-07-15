@@ -2,7 +2,7 @@
 
 from block import Block
 from transaction import Transaction
-from user import User
+from user import User, AuthenticationError
 from utils import load_configuration_file
 import time
 
@@ -18,6 +18,7 @@ import sys
 import os
 import hashlib
 import logging
+from cryptography.fernet import Fernet
 
 import rpyc
 from rpyc.utils.server import ThreadedServer
@@ -29,6 +30,8 @@ formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 hdlr.setFormatter(formatter)
 logger.addHandler(hdlr)
 
+DEFAULT_EXPIRY = 86400 * 90
+
 ############################################################################
 conf = {}
 BLOCK_CHAIN = []
@@ -36,6 +39,15 @@ USERS = {}
 MINERS = {}
 QWINNERS = {}
 PENDING_BLOCKS = {}
+SECRET_KEY = None
+
+def init(conf):
+    global SECRET_KEY
+
+    SECRET_KEY = conf['secretKey'].encode('ascii')
+
+    if SECRET_KEY is None:
+        raise Exception('Missing key')
 
 def dump_block_chain():
     for block in BLOCK_CHAIN:
@@ -89,8 +101,9 @@ def restore_block_chain_from_json(data):
 def restore_users_from_json(data):
     for s_user in data:
         user = User(s_user['name'], s_user['email'], s_user['passwd'],
-                    base64.b64decode(s_user['private_key']),
-                    base64.b64decode(s_user['public_key']))
+                    priv = base64.b64decode(s_user['private_key']),
+                    pub = base64.b64decode(s_user['public_key']),
+                    salt = s_user['salt'])
         print user
         USERS[user.email] = user
     print '='*20
@@ -184,16 +197,32 @@ def get_user_from_public_key(pub):
             return USERS[k]
     return None
 
-def is_user_authenticated(login, password):
-    if login not in USERS:
-        return {'code': 400, 'message': 'Unknown user'}
+def is_user_authenticated(token, err = []):
+    cipher = Fernet(SECRET_KEY)
+    ts = cipher.extract_timestamp(token)
+    now = int(time.time())
 
-    user = USERS[login]
+    if (now - ts) > DEFAULT_EXPIRY:
+        err.append({'code': 400, 'message': 'Authentication expired'})
 
-    if not user.authenticate(password):
-        return {'code': 400, 'message': 'Authentication failed'}
+        return None
 
-    return None
+    b64 = cipher.decrypt(token)
+    plain = base64.b64decode(b64)
+    _json = json.loads(plain)
+
+    user = USERS[_json['email']]
+
+    if user is None:
+        err.append({'code': 400, 'message': 'Unknown session'})
+
+        return None
+
+    if user.is_authenticated(_json['token']):
+        return user
+    else:
+        err.append({'code': 400, 'message': 'Fail to authenticate'})
+        return None
 
 def get_account_history(user_email):
     balance = 0
@@ -245,52 +274,71 @@ class BlockChainService(rpyc.Service):
 
         return None
 
-    def exposed_transaction(self, login, password, recipient, amount):
-        res = is_user_authenticated(login, password)
-
-        if res is not None:
-            return res
-
+    def handle_transaction(self, author, recipient, amount):
         if recipient not in USERS:
             return { 'code': 400, 'message': 'Unknown user' }
 
-        if get_account_history(login)['balance'] < amount:
+        if get_account_history(author)['balance'] < amount:
             return { 'code': 400, 'message': 'Unsufficient balance' }
 
-        res = self.send_coin(USERS[login], USERS[recipient], amount, 'Transaction')
+        res = self.send_coin(USERS[author], USERS[recipient], amount, 'Transaction')
 
         if res:
             return { 'code': 200, 'message': 'Transaction will be added to block' }
         else:
             return { 'code': 400, 'message': 'Unable to process the transaction' }
 
-    def exposed_history(self, login, password):
-        res = is_user_authenticated(login, password)
+    def exposed_master_credit(self, priv, recipient, amount):
+        email = 'master@intersec.com'
 
-        if res is not None:
-            return res
+        if priv != USERS[email].private_key:
+            return { 'code': 400, 'message': 'Unable to process the transaction' }
 
-        history = get_account_history(login)['history']
+        self.handle_transaction(email, recipient, amount)
+
+    def exposed_transaction(self, token, recipient, amount):
+        err = []
+        user = is_user_authenticated(token, err)
+
+        if err:
+            return err[0]
+
+        email = user.email
+
+        return self.handle_transaction(email, recipient, amount)
+
+    def exposed_history(self, token):
+        err = []
+        user = is_user_authenticated(token, err)
+
+        if err:
+            return err[0]
+
+        history = get_account_history(user.email)['history']
 
         return { 'code': 200, 'history': history }
 
-    def exposed_get_account(self, login, password):
-        res = is_user_authenticated(login, password)
+    def exposed_get_account(self, token):
+        logger.debug('Request account for token %s' % (token))
 
-        if res is not None:
-            return res
+        err = []
+        user = is_user_authenticated(token, err)
 
-        account = get_account_history(login)
+        if err:
+            return err[0]
+
+        account = get_account_history(user.email)
 
         return { 'code': 200, 'account': account }
 
-    def exposed_get_balance(self, login, password):
-        res = is_user_authenticated(login, password)
+    def exposed_get_balance(self, token):
+        err = []
+        user = is_user_authenticated(token, err)
 
-        if res is not None:
-            return res
+        if err:
+            return err[0]
 
-        balance = get_account_history(login)['balance']
+        balance = get_account_history(user.email)['balance']
 
         return { 'code': 200, 'balance': balance }
 
@@ -366,9 +414,6 @@ class BlockChainService(rpyc.Service):
         return True
 
     def send_coin(self, user_from, user_to, amount, label='Transaction'):
-        if user_to.email == 'master@intersec.com':
-            return False
-
         last_block = BLOCK_CHAIN[len(BLOCK_CHAIN) - 1]
         tx = create_transaction(user_from, user_to, amount)
         tx.label = label
@@ -377,7 +422,39 @@ class BlockChainService(rpyc.Service):
                       last_block.hash, [tx])
         return self.broadcast_miner_compute(block)
 
-    # USERS {{{
+    # Users {{{
+
+    def exposed_authenticate_user(self, email, passwd):
+        user = None
+
+        for k in USERS:
+            if USERS[k].email == email:
+                user = USERS[k]
+                break
+
+        if user is None:
+            return { 'code': 400, 'message': 'Unknown user' }
+
+        try:
+            res = user.authenticate(passwd)
+
+            token = {
+                'email': user.email,
+                'token': res
+            }
+
+            _str = json.dumps(token)
+
+            b64 = base64.b64encode(_str)
+
+            cipher = Fernet(SECRET_KEY)
+            encrypted = cipher.encrypt(b64)
+
+            return { 'code': 201, 'message': 'Successfully authenticated', 'token': encrypted }
+        except AuthenticationError:
+            return { 'code': 400, 'message': 'Authentication failed' }
+        except Exception:
+            return { 'code': 400, 'message': 'Unknown error while trying to authenticate' }
 
     def exposed_create_user(self, name, email, passwd):
         res = create_user(name, email, passwd)
@@ -391,15 +468,16 @@ class BlockChainService(rpyc.Service):
 
 ###########################################################################
 
-if __name__ == '__main__':
-    global conf
 
+if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('-c', '--conf',
                         help='server configuration file')
 
     args = parser.parse_args()
     conf = load_configuration_file(args.conf)
+
+    init(conf)
 
     load_users()
     load_services()

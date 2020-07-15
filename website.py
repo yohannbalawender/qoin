@@ -2,10 +2,13 @@
 
 # Blockchain website
 
+import os
 import socket
 import requests
-from flask import Flask, render_template, jsonify, request
-from flask_cors import CORS
+import flask
+from flask import Flask, render_template, jsonify, request, session
+from flask_session import Session
+from flask_cors import CORS, cross_origin
 import logging
 import json
 from copy import deepcopy
@@ -15,7 +18,7 @@ import rpyc
 from src import utils
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, supports_credentials=True)
 
 logger = logging.getLogger('blockchain')
 hdlr = logging.FileHandler('log/blockchain.log')
@@ -27,59 +30,87 @@ logger.addHandler(hdlr)
 # {{{ API
 
 class BlockchainApi:
-    def request_send_coin(self, values):
+    def get_connection(self):
         global conf
 
-        conn = rpyc.connect(host = conf['server']['ip'], port = conf['server']['port'])
-
-        return conn.root.transaction(values['login'], values['password'], values['recipient'], int(values['amount']))
-
-    def request_account(self, login, passwd):
-        global conf
-
-        conn = rpyc.connect(host = conf['server']['ip'],
+        return rpyc.connect(host = conf['server']['ip'],
                             port = conf['server']['port'])
 
-        return conn.root.get_account(login, passwd)
+    def request_auth(self, email, passwd):
+        conn = self.get_connection()
+
+        return conn.root.authenticate_user(email, passwd)
+
+    def request_send_coin(self, token, values):
+        conn = self.get_connection()
+
+        return conn.root.transaction(token, values['recipient'], int(values['amount']))
+
+    def request_account(self, token):
+        conn = self.get_connection()
+
+        return conn.root.get_account(token)
 
 # }}}
 # {{{ Website
 
-@app.route('/account/get', methods=['GET'])
+@app.route('/auth', methods=['POST'])
+@cross_origin()
+def authenticate():
+    global API
+
+    login = None
+    password = None
+
+    if request.form is not None:
+        login = request.form['login']
+        password = request.form['password']
+
+    if login is None or password is None:
+        return jsonify({'message': 'Missing request parameters'}), 400
+
+    res = API.request_auth(login, password)
+
+    if 'token' in res:
+        session['token'] = res['token']
+
+    return jsonify({ 'message': res['message'] }), res['code']
+
+@app.route('/account/get', methods=['POST'])
+@cross_origin()
 def get_account():
     global API
 
-    login = request.args.get('login', type = str)
-    password = request.args.get('password', type = str)
-
-    if login is None or password is None:
-        return jsonify({'message': 'Login and password arguments must be '
-                                   'provided to get the account'}), 400
+    if not 'token' in session:
+        return jsonify({'message': 'Unknown session, cannont get the account'}), 400
 
     logger.debug('Ask for history')
+    response = API.request_account(session['token'])
 
-    response = API.request_account(login, password)
+    if 'account' in response:
+        # Deep copy because the response is not serializable,
+        # for an unknown reason
+        ac = deepcopy(response['account'])
 
-    # Deep copy because the response is not serializable,
-    # for an unknown reason
-    ac = deepcopy(response['account'])
+        return jsonify({ 'account': ac }), response['code']
 
-    return jsonify({ 'account': ac }), response['code']
+    return jsonify({ 'message': response['message'] }), response['code']
 
 @app.route('/transaction/new', methods=['POST'])
+@cross_origin()
 def new_transaction():
     global API
 
     values = request.form
 
-    required = ['login', 'password', 'recipient', 'amount']
+    required = ['recipient', 'amount']
     if not all(k in values for k in required):
         return jsonify({'message': 'Error when trying to create transaction'}), 400
 
     # Create transaction for the blockchain
     logger.debug('Ask for new transaction')
 
-    response = API.request_send_coin(values)
+    response = API.request_send_coin(session['token'], values)
 
     return jsonify(response['message']), response['code']
 
@@ -108,6 +139,16 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     conf = utils.load_configuration_file(args.conf)
+
+    app.config.update(
+        SECRET_KEY=conf['secretKey'],
+        SESSION_COOKIE_HTTPONLY=False,
+        SESSION_COOKIE_SECURE=False,
+        SESSION_COOKIE_PATH='/',
+        SESSION_TYPE = 'filesystem',
+    )
+
+    Session(app)
 
     API = BlockchainApi()
 
