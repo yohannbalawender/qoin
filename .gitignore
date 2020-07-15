@@ -1,0 +1,6 @@
+log/*
+src/.keys
+src/.blockchain
+src/.users
+node_modules
+*.swp
