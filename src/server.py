@@ -12,6 +12,7 @@ from copy import deepcopy
 import signal
 import sys
 import os
+import stat
 import hashlib
 import logging
 from cryptography.fernet import Fernet
@@ -176,34 +177,53 @@ def load_services():
         restore_services_from_json(data)
 
 
+def set_internal_dir(path):
+    os.mkdir(path)
+    # Read and execute owner permission
+    os.chmod(path, stat.S_IRUSR | stat.S_IXUSR)
+
+
+def set_internal_file_mod(path):
+    # Read and write owner permission
+    os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+
+
 def save_block_chain():
-    if not os.path.exists(conf['blockchainDir']):
-        os.mkdir(conf['blockchainDir'])
+    dir_path = conf['blockchainDir']
+    if not os.path.exists(dir_path):
+        set_internal_dir(dir_path)
 
     blocks = []
     for block in BLOCK_CHAIN:
         print block
         blocks.append(block.serialize())
 
-    with open(conf['blockchainDir'] + '/dump.json', 'w') as outfile:
+    file_path = conf['blockchainDir'] + '/dump.json'
+    with open(file_path, 'w') as outfile:
         json.dump(blocks, outfile)
+        set_internal_file_mod(file_path)
 
 
 def save_users():
-    if not os.path.exists(conf['usersDir']):
-        os.mkdir(conf['usersDir'])
+    dir_path = conf['usersDir']
+    if not os.path.exists(dir_path):
+        set_internal_dir(dir_path)
 
     users = []
     for k in USERS:
         users.append(USERS[k].serialize())
 
-    # TODO: right permission on user folder
-    with open(conf['usersDir'] + '/dump.json', 'w') as outfile:
+    file_path = conf['usersDir'] + '/dump.json'
+    with open(file_path, 'w') as outfile:
         json.dump(users, outfile)
+        set_internal_file_mod(file_path)
+
 
 def save_services():
-    if not os.path.exists(conf['servicesDir']):
-        os.mkdir(conf['servicesDir'])
+    dir_path = conf['servicesDir']
+    if not os.path.exists(dir_path):
+        os.mkdir(dir_path)
+        set_internal_dir(dir_path)
 
     services = []
 
@@ -211,8 +231,10 @@ def save_services():
         services.append({'host': s[0], 'port': s[1], 'role': s[2],
                          'owner': s[3], 'key': s[4]})
 
-    with open(conf['servicesDir'] + '/dump.json', 'w') as outfile:
+    file_path = conf['servicesDir'] + '/dump.json'
+    with open(file_path, 'w') as outfile:
         json.dump(services, outfile)
+        set_internal_file_mod(file_path)
 
 
 def signal_handler(sig, frame):
