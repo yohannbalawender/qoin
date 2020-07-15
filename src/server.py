@@ -77,6 +77,8 @@ def create_user(name, email, passwd):
     return False
 
 def restore_block_chain_from_json(data):
+    prev_hash = None
+
     for s_block in data:
         block = Block(None, None, None, None)
         tx_list = []
@@ -95,8 +97,18 @@ def restore_block_chain_from_json(data):
         block.nonce     = s_block['nonce']
         block.hash      = s_block['hash']
 
+        # Checks
+        if not block.check_validity():
+            raise Exception('Cannot restore the blockchain because a signature is invalid')
+
+        if s_block['index'] > 0:
+            if s_block['prev_hash'] != prev_hash:
+                raise Exception('Cannot restore the blockchain because hash is invalid')
+
         print block
         BLOCK_CHAIN.append(block)
+
+        prev_hash = s_block['hash']
 
 def restore_users_from_json(data):
     for s_user in data:

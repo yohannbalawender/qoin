@@ -46,61 +46,55 @@ class MinerServer(ThreadedServer):
         conn.close()
 
     def get_connection(self):
-        return rpyc.connect(self.server_host, self.server_port)
+        try:
+            return rpyc.connect(self.server_host, self.server_port,
+                                config = { 'credentials': ('foo', 'bar')  })
+        except socket.error as e:
+            raise Exception('Unable to connect master service')
+
+def get_block_obj(s_block):
+    block = Block(None, None, None, None)
+
+    tx_list = []
+
+    for s_tx in s_block['tx_list']:
+        tx = Transaction(None, None, s_tx['amount'], s_tx['ts'])
+        tx.snd = base64.b64decode(s_tx['snd'])
+        tx.rcv = base64.b64decode(s_tx['rcv'])
+        tx.signature = base64.b64decode(s_tx['signature'])
+
+        tx_list.append(tx)
+
+    block.index     = s_block['index']
+    block.ts        = s_block['ts']
+    block.prev_hash = s_block['prev_hash']
+    block.tx_list   = tx_list
+
+    return block
 
 
 class MinerClient(rpyc.Service):
     def exposed_compute_hash(self, s_block):
         print '='*20
-        if not check_block(s_block):
+
+        block = get_block_obj(s_block)
+
+        if not block.check_validity():
             print 'Block signature verification failed'
             
             return {'code': 400, 'message': 'Invalid block: miner reject it'}
 
         print 'Block signature verification succeed'
 
-        result = self.compute_block_hash(s_block)
+        result = self.compute_block_hash(block)
 
         return {'code': 200, 'result': result}
 
-    def compute_block_hash(self, s_block):
-        block = Block(None, None, None, None)
-        tx_list = []
-
-        for s_tx in s_block['tx_list']:
-            tx = Transaction(None, None, s_tx['amount'], s_tx['ts'])
-            tx.snd = base64.b64decode(s_tx['snd'])
-            tx.rcv = base64.b64decode(s_tx['rcv'])
-            tx.signature = base64.b64decode(s_tx['signature'])
-
-            tx_list.append(tx)
-
-        block.index     = s_block['index']
-        block.ts        = s_block['ts']
-        block.prev_hash = s_block['prev_hash']
-        block.tx_list   = tx_list
-
+    def compute_block_hash(self, block):
         nonce, hash = block.gen_hash()
         block.set_hash(nonce, hash)
 
         return {'block' : block.serialize() }
-
-def check_block(block):
-    valid = True
-
-    for s_tx in block['tx_list']:
-        vk_str = base64.b64decode(s_tx['snd'])
-        vk = ecdsa.VerifyingKey.from_string(vk_str, curve=ecdsa.SECP256k1)
-
-        msg = '%d%s%s%d' % (s_tx['amount'],
-                            base64.b64decode(s_tx['snd']),
-                            base64.b64decode(s_tx['rcv']),
-                            s_tx['ts'])
-
-        valid = valid and vk.verify(base64.b64decode(s_tx['signature']),
-                                    msg)
-
-    return valid
 
 ###########################################################################
 

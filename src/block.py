@@ -1,4 +1,5 @@
 import hashlib
+import ecdsa
 
 def has_proof_of_work(hash):
     # Number of most significant bytes that are zero.
@@ -52,6 +53,22 @@ class Block:
             return False
         return True
 
+    def check_validity(self):
+        valid = True
+
+        for tx in self.tx_list:
+            vk_str = tx.snd
+            vk = ecdsa.VerifyingKey.from_string(vk_str, curve=ecdsa.SECP256k1)
+
+            msg = '%d%s%s%d' % (tx.amount,
+                                tx.snd,
+                                tx.rcv,
+                                tx.ts)
+
+            valid = valid and vk.verify(tx.signature,
+                                        msg)
+
+        return valid
 
     def set_hash(self, nonce, hash):
         self.nonce = nonce
