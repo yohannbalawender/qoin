@@ -60,6 +60,13 @@ class BlockchainApi:
 
         return response
 
+    def service_refresh_key(self, token, key):
+        conn = self.get_connection()
+
+        response = conn.root.service_refresh_key(token, key)
+
+        return response
+
 # }}}
 # {{{ Website
 
@@ -145,6 +152,19 @@ def list_users():
         return jsonify(users), response['code']
 
     return jsonify({'message': response['message']}), response['code']
+
+
+@app.route('/service/refresh-key', methods=['POST'])
+@cross_origin()
+def service_refresh_key():
+    global API
+
+    key = request.form['key']
+
+    response = API.service_refresh_key(session['token'], key)
+
+    return jsonify({'message': response['message'],
+                    'key': response['key']}), response['code']
 
 
 @app.route('/exit', methods=['GET'])

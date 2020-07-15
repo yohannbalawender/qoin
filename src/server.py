@@ -625,6 +625,20 @@ class BlockChainService(rpyc.Service):
 
         return {'code': 200, 'users': users}
 
+    def exposed_service_refresh_key(self, token, key):
+        err = []
+        user = is_user_authenticated(token, err)
+
+        if err:
+            return err[0]
+
+        (new_key, err) = user.service_refresh_key(key)
+
+        if err:
+            return {'code': 400, 'message': 'Could not change the service key'}
+
+        return {'code': 200, 'key': new_key}
+
     # }}}
 
 ###########################################################################

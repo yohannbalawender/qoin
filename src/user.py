@@ -140,6 +140,22 @@ class User:
         return len(self.tx_list) < ALLOWED_TRANSACTION_PER_MIN \
             or time.time() - self.tx_list[0] > 60
 
+    def _get_service(self, key):
+        for s in self.services:
+            if s['key'] == key:
+                return s
+
+    def service_refresh_key(self, key):
+        service = self._get_service(key)
+
+        if service is None:
+            return service, 'Unknown service'
+
+        new_key = random_hex(32)
+        service['key'] = new_key
+
+        return new_key, None
+
     def __str__(self):
         return 'User: %s [%s]\n      pubKey:%s\n      privKey:#######' %\
                 (self.email, self.name, base64.b64encode(self.public_key))

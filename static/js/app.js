@@ -102,15 +102,28 @@ $(document).ready(() => {
     if (window.BLOCKCHAIN_APP.email) {
         $.post('/users/list', { })
         .done((users) => {
-            var $recipient = $('#recipient')
+            const $recipient = $('#recipient')
 
             users.forEach((u) => {
-                var html = `<option value="${ u.email }">${ u.name } (${ u.email })</option>`
+                const html = `<option value="${ u.email }">${ u.name } (${ u.email })</option>`
 
                 $recipient.append(html)
             })
         })
     }
+
+    $('.refresh-key').click(function() {
+        const key = $(this).data('key')
+
+        $.post('/service/refresh-key', { key: key })
+         .done((response) => {
+            window.notification.show('success', { msg: 'Service key successfully refreshed' , dismiss: true })
+
+            $(this).data('key', response.key)
+
+            $(this).parents('.service-item').find('input').val(response.key)
+        })
+    })
 })
 
 var Notification = function() {
