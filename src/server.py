@@ -183,12 +183,12 @@ def get_user_from_public_key(pub):
 
 def is_user_authenticated(login, password):
     if login not in USERS:
-        return jsonify({'message': 'Unknown user'}), 400
+        return {'code': 400, 'message': 'Unknown user'}
 
     user = USERS[login]
 
     if not user.authenticate(password):
-        return jsonify({'message': 'Authentication failed'}), 400
+        return {'code': 400, 'message': 'Authentication failed'}
 
     return None
 
@@ -265,13 +265,13 @@ class BlockChainService(rpyc.Service):
         return response
 
     def exposed_transaction(self, login, password, recipient, amount):
-        if recipient not in USERS or login not in USERS:
-            return { 'code': 400, 'message': 'Unknown user' }
-
         res = is_user_authenticated(login, password)
 
         if res is not None:
-            return { 'code': 403, 'message': 'Authentication failed' }
+            return res
+
+        if recipient not in USERS:
+            return { 'code': 400, 'message': 'Unknown user' }
 
         if get_account_history(login)['balance'] < amount:
             return { 'code': 400, 'message': 'Unsufficient balance' }
@@ -281,39 +281,30 @@ class BlockChainService(rpyc.Service):
         return { 'code': 200, 'message': 'Transaction will be added to block' }
 
     def exposed_history(self, login, password):
-        if login not in USERS:
-            return { 'code': 400, 'message': 'Unknown user' }
-
         res = is_user_authenticated(login, password)
 
         if res is not None:
-            return { 'code': 403, 'message': 'Authentication failed' }
+            return res
 
         history = get_account_history(login)['history']
 
         return { 'code': 200, 'history': history }
 
     def exposed_get_account(self, login, password):
-        if login not in USERS:
-            return { 'code': 400, 'message': 'Unknown user' }
-
         res = is_user_authenticated(login, password)
 
         if res is not None:
-            return { 'code': 403, 'message': 'Authentication failed' }
+            return res
 
         account = get_account_history(login)
 
         return { 'code': 200, 'account': account }
 
     def exposed_get_balance(self, login, password):
-        if login not in USERS:
-            return { 'code': 400, 'message': 'Unknown user' }
-
         res = is_user_authenticated(login, password)
 
         if res is not None:
-            return { 'code': 403, 'message': 'Authentication failed' }
+            return res
 
         balance = get_account_history(login)['balance']
 
