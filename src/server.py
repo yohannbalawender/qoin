@@ -8,17 +8,27 @@ import time
 
 import json
 import socket
-from flask import Flask, jsonify, request
-from flask_cors import CORS
 from argparse import ArgumentParser
-import requests
 import base64
 from collections import OrderedDict
+import threading
 
 import signal
 import sys
 import os
 import hashlib
+import logging
+
+import rpyc
+from rpyc.utils.server import ThreadedServer
+
+logger = logging.getLogger('blockchain')
+hdlr = logging.FileHandler('log/blockchain.log')
+
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+hdlr.setFormatter(formatter)
+logger.addHandler(hdlr)
+
 ############################################################################
 conf = {}
 BLOCK_CHAIN = []
@@ -129,26 +139,6 @@ def signal_handler(sig, frame):
     save_users()
     sys.exit(0)
 
-def broadcast_miner_compute(block):
-    data = { 'block': block.serialize() }
-    for miner in MINERS:
-        address = 'http://%s:%d/compute_hash' % (miner[0], miner[1])
-        requests.post(address, data=json.dumps(data, ensure_ascii=False),
-                      headers={'Content-Type': 'application/json'})
-        PENDING_BLOCKS[(block.index, block.ts, block.prev_hash)] = block
-
-def send_coin(user_from, user_to, amount, label='Transaction'):
-    last_block = BLOCK_CHAIN[len(BLOCK_CHAIN) - 1]
-    tx = create_transaction(user_from, user_to, amount)
-    tx.label = label
-
-    block = Block(last_block.index + 1, time.time(),
-                  last_block.hash, [tx])
-    broadcast_miner_compute(block)
-#    nonce, hash = block.gen_hash()
-#    block.set_hash(nonce, hash)
-#    BLOCK_CHAIN.append(block)
-
 def get_user_from_public_key(pub):
     for k in USERS:
         if USERS[k].public_key == pub:
@@ -193,148 +183,196 @@ def get_account_history(user_email):
                 }
     return { 'history': history, 'balance': balance }
 
-def get_data_reward(data):
-    # Choose the right Qwinner
-    qwinner = QWINNERS.keys()[0]
+###########################################################################
 
-    address = 'http://%s:%d/compute_reward' % (qwinner[0], qwinner[1])
-    resp = requests.post(address, data=json.dumps(data, ensure_ascii=False),
-                         headers={'Content-Type': 'application/json'})
+class BlockChainService(rpyc.Service):
+    def on_connect(self, conn):
+        print 'New connection accepted'
 
-    _json = resp.json()
+    def on_disconnect(self, conn):
+        print 'Connection closed'
 
-    return { 'rewarded': data['email'], 'amount': _json['value'] }
+    def exposed_register_miner(self, host, port):
+        MINERS[(host, int(port))] = 1
+
+        logger.info('Miner registration succeed')
+
+        return None
+
+    def exposed_register_qwinner(self, host, port):
+        QWINNERS[(host, int(port))] = 1
+
+        logger.info('Qwinner registration succeed')
+
+        return None
+
+    def exposed_register_qwinner(self, host, port):
+        QWINNERS[(host, int(port))] = 1
+
+        logger.info('Qwinner registration succeed')
+
+        return None
+
+    def exposed_hash_result(self, s_block):
+        key = (s_block['index'], s_block['ts'], s_block['prev_hash'])
+
+        if key in PENDING_BLOCKS:
+            block = PENDING_BLOCKS[key]
+
+            # TODO verif
+            if not block.check_hash_validity(s_block['nonce'] , s_block['hash']):
+                logging.error('Invalid hash')
+
+                return { 'code': 403, 'message': 'Invalid hash' }
+
+            block.set_hash(s_block['nonce'] , s_block['hash'])
+            # print 'Solved by %s' % request.remote_addr
+            print 'Block solved'
+            PENDING_BLOCKS.pop(key, None)
+            BLOCK_CHAIN.append(block)
+            response = { 'code': 200, 'message': 'Good job!' }
+        else:
+            response = { 'code': '200', 'message': 'Bad luck, block already solved' }
+        return response
+
+    def exposed_transaction(self, login, password, recipient, amount):
+        if recipient not in USERS or login not in USERS:
+            return { 'code': 400, 'message': 'Unknown user' }
+
+        res = is_user_authenticated(login, password)
+
+        if res is not None:
+            return { 'code': 403, 'message': 'Authentication failed' }
+
+        if get_account_history(login)['balance'] < amount:
+            return { 'code': 400, 'message': 'Unsufficient balance' }
+
+        self.send_coin(USERS[login], USERS[recipient], amount, 'Transaction')
+
+        return { 'code': 200, 'message': 'Transaction will be added to block' }
+
+    def exposed_history(self, login, password):
+        if login not in USERS:
+            return { 'code': 400, 'message': 'Unknown user' }
+
+        res = is_user_authenticated(login, password)
+
+        if res is not None:
+            return { 'code': 403, 'message': 'Authentication failed' }
+
+        history = get_account_history(login)['history']
+
+        return { 'code': 200, 'history': history }
+
+    def exposed_get_account(self, login, password):
+        if login not in USERS:
+            return { 'code': 400, 'message': 'Unknown user' }
+
+        res = is_user_authenticated(login, password)
+
+        if res is not None:
+            return { 'code': 403, 'message': 'Authentication failed' }
+
+        account = get_account_history(login)
+
+        return { 'code': 200, 'account': account }
+
+    def exposed_get_balance(self, login, password):
+        if login not in USERS:
+            return { 'code': 400, 'message': 'Unknown user' }
+
+        res = is_user_authenticated(login, password)
+
+        if res is not None:
+            return { 'code': 403, 'message': 'Authentication failed' }
+
+        balance = get_account_history(login)['balance']
+
+        return { 'code': 200, 'balance': balance }
+
+    def exposed_on_gerrit_notify(self, data):
+        if data['email'] not in USERS:
+            return { 'code': 400, 'message': 'Unknown user' }
+
+        data_reward = self.get_data_reward(data)
+
+        self.send_coin(USERS['master@intersec.com'], USERS[data['email']],
+                       data_reward['amount'], 'Reward')
+
+        return {'code': 200, 'message': 'Gerrit reward will be added to block'}
+
+    def get_data_reward(self, data):
+        # TODO: choose the right Qwinner
+        qwinner = QWINNERS.keys()[0]
+        conn = rpyc.connect(host = qwinner[0], port = qwinner[1], config = { 'allow_all_attrs': True })
+
+        resp = conn.root.compute_reward(data)
+
+        return { 'code': 200, 'rewarded': data['email'], 'amount': resp['value'] }
+
+    def exposed_miner_hash_result(self, s_block):
+        key = (s_block['index'], s_block['ts'], s_block['prev_hash'])
+        if key in PENDING_BLOCKS:
+            block = PENDING_BLOCKS[key]
+
+            if not block.check_hash_validity(s_block['nonce'] , s_block['hash']):
+                #TODO: which miner ?
+                return {'code': 400, 'message': 'Miner send an invalid hash'}
+
+            block.set_hash(s_block['nonce'] , s_block['hash'])
+            print 'Solved by %s' % request.remote_addr
+            PENDING_BLOCKS.pop(key, None)
+            BLOCK_CHAIN.append(block)
+            response = {'code': 200, 'message': 'Good job!'}
+        else:
+            response = {'code': 200, 'message': 'Bad luck, block already solved'}
+        return response
+
+    def send_miner_compute(self, miner, block):
+        conn = rpyc.connect(host = miner[0], port = miner[1], config = { 'allow_all_attrs': True })
+
+        data = block.serialize()
+
+        response = conn.root.compute_hash(data)
+
+        self.miner_hash_result(miner, response)
+
+    def miner_hash_result(self, miner, response):
+        s_block = response['result']['block']
+        key = (s_block['index'], s_block['ts'], s_block['prev_hash'])
+        if key in PENDING_BLOCKS:
+            block = PENDING_BLOCKS[key]
+
+            # TODO verif
+            if not block.check_hash_validity(s_block['nonce'] , s_block['hash']):
+                print 'Miner %s sent an invalid hash' % (miner.__str__())
+                return
+
+            block.set_hash(s_block['nonce'] , s_block['hash'])
+            print 'Solved by miner %s, good job ! ' % (miner.__str__())
+            PENDING_BLOCKS.pop(key, None)
+            BLOCK_CHAIN.append(block)
+        else:
+            print 'Bad luck, block already solved'
+
+    def broadcast_miner_compute(self, block):
+        PENDING_BLOCKS[(block.index, block.ts, block.prev_hash)] = block
+
+        for miner in MINERS:
+            thr = threading.Thread(target=self.send_miner_compute,
+                                   args=(miner, block,))
+            thr.start()
+
+    def send_coin(self, user_from, user_to, amount, label='Transaction'):
+        last_block = BLOCK_CHAIN[len(BLOCK_CHAIN) - 1]
+        tx = create_transaction(user_from, user_to, amount)
+        tx.label = label
+
+        block = Block(last_block.index + 1, time.time(),
+                      last_block.hash, [tx])
+        self.broadcast_miner_compute(block)
 
 ###########################################################################
-app = Flask(__name__)
-CORS(app)
-
-@app.route('/miner_hash_result', methods=['POST'])
-def miner_hash_result():
-    response = None
-    req = request.get_json()
-    s_block = req['block']
-    key = (s_block['index'], s_block['ts'], s_block['prev_hash'])
-    if key in PENDING_BLOCKS:
-        block = PENDING_BLOCKS[key]
-
-        # TODO verif
-        if not block.check_hash_validity(s_block['nonce'] , s_block['hash']):
-            response = {'message': 'Miner %s send an invalid hash' %
-                        request.remote_addr}
-            return jsonify(response), 400
-
-        block.set_hash(s_block['nonce'] , s_block['hash'])
-        print 'Solved by %s' % request.remote_addr
-        PENDING_BLOCKS.pop(key, None)
-        BLOCK_CHAIN.append(block)
-        response = {'message': 'Good job!'}
-    else:
-        response = {'message': 'Bad luck, block already solved'}
-    return jsonify(response), 200
-
-@app.route('/register_miner', methods=['POST'])
-def register_miner():
-    req = request.get_json()
-    port = req['port']
-    MINERS[(request.remote_addr, int(port))] = 1
-    response = {'message': 'Miner registration succeed'}
-    return jsonify(response), 201
-
-@app.route('/register_qwinner', methods=['POST'])
-def register_qwinner():
-    req = request.get_json()
-    port = req['port']
-    QWINNERS[(request.remote_addr, int(port))] = 1
-    response = {'message': 'Qwinner registration succeed'}
-    return jsonify(response), 201
-
-
-@app.route('/transaction', methods=['POST'])
-def transaction():
-    req = request.get_json()
-
-    sender = req['login']
-    password = req['password']
-
-    recepient = req['recipient']
-    amount = int(req['amount'])
-
-    res =  is_user_authenticated(sender, password)
-
-    if res is not None:
-        return res
-
-    if recepient not in USERS:
-        return jsonify({'message': 'Unknown user'}), 400
-
-    if get_account_history(sender)['balance'] < amount:
-        return jsonify({'message': 'Unsufficient balance'}), 400
-
-    send_coin(sender_user, USERS[recepient], amount, 'Transaction')
-
-    response = {'message': 'Transaction will be added to block'}
-
-    return jsonify(response), 200
-
-@app.route('/balance', methods=['GET'])
-def balance():
-    login = request.args.get("login")
-    password = request.args.get("password")
-
-    res =  is_user_authenticated(login, password)
-
-    if res is not None:
-        return res
-
-    balance = get_account_history(login)['balance']
-
-    response = { 'balance': balance }
-    return jsonify(response)
-
-@app.route('/history', methods=['GET'])
-def history():
-    login = request.args.get("login")
-    password = request.args.get("password")
-
-    res =  is_user_authenticated(login, password)
-
-    if res is not None:
-        return res
-
-    history = get_account_history(login)['history']
-
-    response = { 'history': history }
-    return jsonify(response)
-
-@app.route('/account', methods=['GET'])
-def get_account():
-    login = request.args.get("login")
-    password = request.args.get("password")
-
-    res =  is_user_authenticated(login, password)
-
-    if res is not None:
-        return res
-
-    account = get_account_history(login)
-
-    response = {'account': account}
-    return jsonify(response)
-
-@app.route('/gerrit/notify', methods=['POST'])
-def on_gerrit_notify():
-    data = request.get_json()
-
-    data_reward = get_data_reward(data)
-
-    send_coin(USERS['master@intersec.com'], USERS[data['email']],
-              data_reward['amount'], 'Reward')
-
-    # TODO Check if transaction succeed
-    response = {'message': 'Transaction will be added to block'}
-
-    return jsonify(response), 201
 
 if __name__ == '__main__':
     global conf
@@ -358,5 +396,7 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, signal_handler)
 
-    app.run(host='{0}.corp'.format(socket.gethostname()), port=conf['port'])
+    server = ThreadedServer(BlockChainService, hostname = socket.gethostname(),
+                            port = conf['port'])
+    server.start()
 

@@ -8,51 +8,82 @@ import sys
 
 import json
 import socket
-from flask import Flask, jsonify, request
-from flask_cors import CORS
 from argparse import ArgumentParser
-import requests
 import base64
 import threading
 import ecdsa
 import os
 
+import rpyc
+from rpyc.utils.server import ThreadedServer
+
 conf = {}
 
-def register():
-    data = {
-        'port': conf['port']
-    }
-    requests.post('%s/register_miner' % (conf['server']),
-                  data=json.dumps(data),
-                  headers={'Content-Type': 'application/json'})
+class MinerServer(ThreadedServer):
+    def on_connect(self, conn):
+        print 'Server is connected'
 
-def compute_block_hash(s_block):
-    block = Block(None, None, None, None)
-    tx_list = []
+    def on_disconnect(self, conn):
+        print 'Server is disconnected'
 
-    for s_tx in s_block['tx_list']:
-        tx = Transaction(None, None, s_tx['amount'], s_tx['ts'])
-        tx.snd = base64.b64decode(s_tx['snd'])
-        tx.rcv = base64.b64decode(s_tx['rcv'])
-        tx.signature = base64.b64decode(s_tx['signature'])
+    def set_server_addr(self, host, port):
+        self.server_host = host
+        self.server_port = port
 
-        tx_list.append(tx)
+    def register(self):
+        if self.server_host is None or self.server_port is None:
+            raise BaseException('Cannot register on an unknown server')
 
-    block.index     = s_block['index']
-    block.ts        = s_block['ts']
-    block.prev_hash = s_block['prev_hash']
-    block.tx_list   = tx_list
+        conn = self.get_connection()
 
-    nonce, hash = block.gen_hash()
-    block.set_hash(nonce, hash)
+        res = conn.root.register_miner(self.host, self.port)
 
-    result = {'block' : block.serialize() }
+        if res is not None:
+            raise BaseException('Failed to register miner')
+        else:
+            print 'Miner successfully registered'
 
-    requests.post('%s/miner_hash_result' % (conf['server']),
-                  data=json.dumps(result, ensure_ascii=False),
-                  headers={'Content-Type': 'application/json'})
-    print block
+        conn.close()
+
+    def get_connection(self):
+        return rpyc.connect(self.server_host, self.server_port)
+
+
+class MinerClient(rpyc.Service):
+    def exposed_compute_hash(self, s_block):
+        print '='*20
+        if not check_block(s_block):
+            print 'Block signature verification failed'
+            
+            return {'code': 400, 'message': 'Invalid block: miner reject it'}
+
+        print 'Block signature verification succeed'
+
+        result = self.compute_block_hash(s_block)
+
+        return {'code': 200, 'result': result}
+
+    def compute_block_hash(self, s_block):
+        block = Block(None, None, None, None)
+        tx_list = []
+
+        for s_tx in s_block['tx_list']:
+            tx = Transaction(None, None, s_tx['amount'], s_tx['ts'])
+            tx.snd = base64.b64decode(s_tx['snd'])
+            tx.rcv = base64.b64decode(s_tx['rcv'])
+            tx.signature = base64.b64decode(s_tx['signature'])
+
+            tx_list.append(tx)
+
+        block.index     = s_block['index']
+        block.ts        = s_block['ts']
+        block.prev_hash = s_block['prev_hash']
+        block.tx_list   = tx_list
+
+        nonce, hash = block.gen_hash()
+        block.set_hash(nonce, hash)
+
+        return {'block' : block.serialize() }
 
 def check_block(block):
     valid = True
@@ -71,28 +102,7 @@ def check_block(block):
 
     return valid
 
-
 ###########################################################################
-app = Flask(__name__)
-CORS(app)
-
-@app.route('/compute_hash', methods=['POST'])
-def compute_hash():
-    req = request.get_json()
-    s_block = req['block']
-
-    print '='*20
-    if not check_block(s_block):
-        print 'Block signature verification failed'
-        response = {'message': 'Invalid block: miner reject it'}
-        return jsonify(response), 400
-
-    print 'Block signature verification succeed'
-    thr = threading.Thread(target=compute_block_hash,
-                           args=(s_block,))
-    thr.start()
-    response = {'message': 'Miner will do the computation'}
-    return jsonify(response), 200
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -102,10 +112,21 @@ if __name__ == '__main__':
     args = parser.parse_args()
     conf = load_configuration_file(args.conf)
 
-    conf['server'] = 'http://%s:%s' % (conf['server']['ip'],
-                                       conf['server']['port'])
+    if conf['server'] is None or conf['server']['ip'] is None \
+        or conf['server']['port'] is None:
+        raise 'Server must be provided in the configuration file'
 
-    register()
+    server_host = conf['server']['ip']
+    server_port = conf['server']['port']
+    client_port = conf['port']
 
-    app.run(host='{0}.corp'.format(socket.gethostname()), port=conf['port'])
+    server = MinerServer(MinerClient, hostname = socket.gethostname(),
+                         port = client_port)
 
+    server.set_server_addr(server_host, server_port)
+
+    server.register()
+
+    print 'Miner service is running'
+
+    server.start()

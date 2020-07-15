@@ -9,6 +9,8 @@ $(document).ready(() => {
         const amount = parseFloat($amount.find('input').val(), 10) */
 
         const sender = $('#sender').val()
+        /* TODO: add password field */
+        const password = $('#password').val()
         const recipient = $('#recipient').val()
         const amount = $('#amount').val()
 
