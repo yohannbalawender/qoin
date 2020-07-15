@@ -4,6 +4,7 @@ import hashlib
 
 import random
 import string
+import time
 
 import logging
 
@@ -13,6 +14,9 @@ hdlr = logging.FileHandler('log/blockchain.log')
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 hdlr.setFormatter(formatter)
 logger.addHandler(hdlr)
+
+# Number of allowed per minute
+ALLOWED_TRANSACTION_PER_MIN = 5
 
 
 class AuthenticationError(Exception):
@@ -34,12 +38,15 @@ def random_hex(length):
 class User:
     def __init__(self, name, email, passwd,
                  priv=None, pub=None,
-                 salt='', services=[]):
+                 salt='', services=[], tx_list=[],
+                 admin=False):
         self.name = name
         self.email = email
         self.passwd = passwd
         self.salt = salt
         self.services = services
+        self.tx_list = []
+        self.admin = admin
 
         if priv is None and pub is None:
             sk = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
@@ -57,7 +64,9 @@ class User:
             'private_key': base64.b64encode(self.private_key),
             'public_key': base64.b64encode(self.public_key),
             'salt': self.salt,
-            'services': self.services
+            'services': self.services,
+            'tx_list': self.tx_list,
+            'admin': self.admin
         }
 
     def _get_hash(self, to_hash):
@@ -117,6 +126,19 @@ class User:
                 break
 
         return found and service[3] == self.email
+
+    def push_tx(self, tx):
+        if len(self.tx_list) == ALLOWED_TRANSACTION_PER_MIN:
+            self.tx_list.pop(0)
+
+        self.tx_list.append(tx.ts)
+
+    def has_allowed_transaction(self):
+        if self.admin:
+            return True
+
+        return len(self.tx_list) < ALLOWED_TRANSACTION_PER_MIN \
+            or time.time() - self.tx_list[0] > 60
 
     def __str__(self):
         return 'User: %s [%s]\n      pubKey:%s\n      privKey:#######' %\

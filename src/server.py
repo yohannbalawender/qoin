@@ -57,7 +57,13 @@ def dump_block_chain():
 
 
 def create_transaction(sender, receiver, amount, label='Transaction'):
-    return Transaction(sender, receiver, amount, time.time(), label)
+    tx = Transaction(sender, receiver, amount, time.time(), label)
+
+    if sender.has_allowed_transaction():
+        sender.push_tx(tx)
+        return tx
+    else:
+        logger.info('Sender %s hits the limit number of allowed transaction')
 
 
 def create_genesis_block():
@@ -70,11 +76,11 @@ def create_genesis_block():
     return block
 
 
-def create_user(name, email, passwd):
+def create_user(name, email, passwd, admin=False):
     if email not in USERS:
         sha_passwd = hashlib.sha256()
         sha_passwd.update(passwd.encode('utf-8'))
-        user = User(name, email, sha_passwd.hexdigest())
+        user = User(name, email, sha_passwd.hexdigest(), admin=admin)
         USERS[email] = user
 
         return True
@@ -320,8 +326,7 @@ class BlockChainService(rpyc.Service):
         if get_account_history(author)['balance'] < amount:
             return {'code': 400, 'message': 'Unsufficient balance'}
 
-        res = self.send_coin(USERS[author], USERS[recipient], amount,
-                             'Transaction')
+        res = self.send_coin(USERS[author], USERS[recipient], amount)
 
         if res:
             return {'code': 200,
@@ -392,7 +397,7 @@ class BlockChainService(rpyc.Service):
         data_reward = self.get_data_reward(data)
 
         self.send_coin(USERS['master@intersec.com'], USERS[data['email']],
-                       data_reward['amount'], 'Reward')
+                       data_reward['amount'], label='Reward')
 
         return {'code': 200, 'message': 'Gerrit reward will be added to block'}
 
@@ -481,8 +486,8 @@ class BlockChainService(rpyc.Service):
                 try:
                     # Add reward for a user, which has a service declared
                     self.add_reward(m, miner_block)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.info('Reward failed: %s' % (e))
 
             thr = threading.Thread(target=self.send_miner_compute,
                                    args=(m, miner_block,))
@@ -510,6 +515,9 @@ class BlockChainService(rpyc.Service):
 
         tr = create_transaction(master, user, reward, label='Reward')
 
+        if tr is None:
+            return False, 'Reward NOK'
+
         block.tx_list.append(tr)
 
         return True, 'Reward OK'
@@ -517,6 +525,9 @@ class BlockChainService(rpyc.Service):
     def send_coin(self, user_from, user_to, amount, label='Transaction'):
         last_block = BLOCK_CHAIN[len(BLOCK_CHAIN) - 1]
         tx = create_transaction(user_from, user_to, amount, label)
+
+        if tx is None:
+            return False
 
         block = Block(last_block.index + 1, time.time(),
                       last_block.hash, [tx])
