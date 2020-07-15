@@ -20381,11 +20381,6 @@ dl li {
   border-top: 1px solid #c9ccd7;
 }
 
-.table.table-hover thead tr,
-.table.table-hover tbody tr {
-  cursor: pointer;
-}
-
 /* Tabs */
 .add-items {
   margin-bottom: 1.5rem;

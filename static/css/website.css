@@ -5,3 +5,7 @@
 .hidden {
     display: none;
 }
+
+#submit-tr {
+    margin-left: 15px;
+}

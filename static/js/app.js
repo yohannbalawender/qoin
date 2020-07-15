@@ -8,9 +8,6 @@ $(document).ready(() => {
         const recipient = $recipient.find('input').val()
         const amount = parseFloat($amount.find('input').val(), 10) */
 
-        const login = $('#sender').val()
-        /* TODO: add password field */
-        const password = $('#password').val()
         const recipient = $('#recipient').val()
         const amount = $('#amount').val()
 
@@ -60,7 +57,7 @@ $(document).ready(() => {
             return false
         }
 
-        $.post('/transaction/new', { login, password, recipient, amount }).done(() => {
+        $.post('/transaction/new', { recipient, amount }).done(() => {
         })
     })
 
@@ -84,7 +81,7 @@ $(document).ready(() => {
             const history = resp.account.history
 
             const formatDate = (date) => {
-                let month = date.getMonth()
+                let month = date.getMonth() + 1
 
                 if (month < 10) {
                     month = '0' + month
@@ -104,14 +101,46 @@ $(document).ready(() => {
         e.preventDefault()
     })
 
-    $.post('/users/list', { })
-    .done((users) => {
-        var $recipient = $('#recipient')
+    $('#submit-auth').click((e) => {
+        const login = $('#login').val()
+        const password = $('#pwd').val()
 
-        users.forEach((u) => {
-            var html = `<option value="${ u.email }">${ u.name } (${ u.email })</option>`
+        $('form').find('.form-group').removeClass('has-danger');
 
-            $recipient.append(html)
+        $.ajax({
+            url: '/auth',
+            type: 'POST',
+            contentType: 'application/x-www-form-urlencoded; charset=UTF-8',
+            data: {
+                'login': login,
+                'password': password,
+            },
+            dataType: 'json',
+            xhrFields: {
+                withCredentials: true
+            },
+            crossDomain: true
         })
+        .done(function(data) {
+            document.location.href = '/';
+        })
+        .fail(function(err) {
+            $('form').find('.form-group').addClass('has-danger');
+        })
+
+        e.preventDefault()
     })
+
+    if (window.BLOCKCHAIN_APP.email) {
+        $.post('/users/list', { })
+        .done((users) => {
+            var $recipient = $('#recipient')
+
+            users.forEach((u) => {
+                var html = `<option value="${ u.email }">${ u.name } (${ u.email })</option>`
+
+                $recipient.append(html)
+            })
+        })
+    }
 })

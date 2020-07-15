@@ -462,7 +462,7 @@ class BlockChainService(rpyc.Service):
             cipher = Fernet(SECRET_KEY)
             encrypted = cipher.encrypt(b64)
 
-            return { 'code': 201, 'message': 'Successfully authenticated', 'token': encrypted }
+            return { 'code': 201, 'message': 'Successfully authenticated', 'token': encrypted, 'email': user.email, 'name': user.name }
         except AuthenticationError:
             return { 'code': 400, 'message': 'Authentication failed' }
         except Exception:

@@ -13,7 +13,7 @@ $(document).ready(() => {
         const history = resp.account.history
 
         const formatDate = (date) => {
-            let month = date.getMonth()
+            let month = date.getMonth() + 1
             let minute = date.getMinutes()
 
             if (month < 10) {

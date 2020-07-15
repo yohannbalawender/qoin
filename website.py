@@ -84,6 +84,8 @@ def authenticate():
 
     if 'token' in res:
         session['token'] = res['token']
+        session['email'] = res['email']
+        session['name'] = res['name']
 
     return jsonify({ 'message': res['message'] }), res['code']
 
@@ -133,22 +135,40 @@ def list_users():
     response = API.request_list_users(session['token'])
 
     if 'users' in response:
-        return jsonify(response['users']), response['code']
+        # Not serialize, must be copied...
+        users = deepcopy(response['users'])
+        return jsonify(users), response['code']
 
     return jsonify({ 'message': response['message'] }), response['code']
 
+@app.route('/exit', methods=['GET'])
+def exit():
+    session.clear()
+
+    return index()
 
 @app.route('/account')
-def balance():
+def account():
     return render_template('./account.html')
+
+@app.route('/history')
+def history():
+    return render_template('./history.html')
 
 @app.route('/transaction')
 def transaction():
     return render_template('./transaction.html')
 
+@app.route('/auth_form')
+def auth_form():
+    return render_template('./auth_form.html')
+
 @app.route('/')
 def index():
-    return render_template('./index.html')
+    if 'token' in session:
+        return account()
+    else:
+        return auth_form()
 
 # }}}
 
