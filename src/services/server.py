@@ -10,17 +10,19 @@ import base64
 import time
 from argparse import ArgumentParser
 import hashlib
+from collections import OrderedDict
+import threading
+from copy import deepcopy
 
 import rpyc
 from cryptography.fernet import Fernet
 
 from src.utils import load_configuration_file, get_logger_by_name
-from src.services.node import Leader
+from src.services.node import Leader, LeaderService
 from src.blockchain import Block, Transaction
 from src.users import User
 
-# MASTER_IDENTIFIER = 'blockchain-master'
-MASTER_IDENTIFIER = 'master@intersec.com'
+MASTER_IDENTIFIER = 'blockchain-master'
 SECRET_KEY = None
 DEFAULT_EXPIRY = 86400 * 90
 
@@ -32,6 +34,9 @@ logger = get_logger_by_name('Blockchain server')
 
 
 class BlockChainServer(Leader):
+    """
+        Implement the blockchain server
+    """
     node_name = "Blockchain server"
     BLOCK_CHAIN = []
 
@@ -71,10 +76,57 @@ class BlockChainServer(Leader):
                 raise BaseException('Cannot restore the blockchain because '
                                     'hash is invalid')
 
-        print block
+        logger.info(block)
         self.BLOCK_CHAIN.append(block)
 
         return s_block['hash']
+
+    def load_state(self, conf):
+        self.load_users(conf)
+        self.load_services(conf)
+        self.load_blockchain(conf)
+
+    def restore_users_from_json(self, data):
+        for s_user in data:
+            user = User(s_user['name'], s_user['email'], s_user['passwd'],
+                        priv=base64.b64decode(s_user['private_key']),
+                        pub=base64.b64decode(s_user['public_key']),
+                        salt=s_user['salt'], services=s_user['services'],
+                        tx_list=['tx_list'], admin=s_user['admin'])
+            logger.info(user)
+            self.service.USERS[user.email] = user
+        logger.info('='*20)
+
+    def load_users(self, conf):
+        filepath = conf['usersDir'] + '/dump.json'
+        if not os.path.isfile(filepath):
+            return
+
+        with open(filepath) as json_file:
+            data = json.load(json_file)
+            self.restore_users_from_json(data)
+
+    def restore_services_from_json(self, data):
+        for s_service in data:
+            data = (s_service['host'], s_service['port'], s_service['role'])
+            s = {'data': data, 'connected': True, 'authenticate': False}
+
+            if 'owner' in s_service and 'key' in s_service['key']:
+                s['authenticate'] = {'owner': s_service['owner'],
+                                     'key': s_service['key']}
+
+            self.service.SERVICES[s_service['token']] = s
+
+        logger.info('%d services restored' % len(self.service.SERVICES))
+
+    def load_services(self, conf):
+        filepath = conf['servicesDir'] + '/dump.json'
+        if not os.path.isfile(filepath):
+            return
+
+        with open(filepath) as json_file:
+            data = json.load(json_file)
+            self.restore_services_from_json(data)
 
     def _restore_blockchain_from_json(self, s_blocks):
         """
@@ -97,21 +149,29 @@ class BlockChainServer(Leader):
             data = json.load(json_file)
             self._restore_blockchain_from_json(data)
 
-        self.service.initialize()
+        self.service.initialize(conf)
+
+    def set_internal_dir(self, path):
+        os.mkdir(path)
+        # Read and execute owner permission
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+
+    def set_internal_file_mod(self, path):
+        # Read and write owner permission
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+
+    def save_state(self, conf):
+        self.save_blockchain(conf)
+        self.save_users(conf)
+        self.save_services(conf)
 
     def save_blockchain(self, conf):
-        def set_internal_dir(path):
-            os.mkdir(path)
-            # Read and execute owner permission
-            os.chmod(path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
-
-        def set_internal_file_mod(path):
-            # Read and write owner permission
-            os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
-
+        """
+            Save the blockchain in a JSON file
+        """
         dir_path = conf['blockchainDir']
         if not os.path.exists(dir_path):
-            set_internal_dir(dir_path)
+            self.set_internal_dir(dir_path)
 
         blocks = []
         for block in self.BLOCK_CHAIN:
@@ -120,30 +180,88 @@ class BlockChainServer(Leader):
         file_path = conf['blockchainDir'] + '/dump.json'
         with open(file_path, 'w') as outfile:
             json.dump(blocks, outfile)
-            set_internal_file_mod(file_path)
+            self.set_internal_file_mod(file_path)
+
+    def save_users(self, conf):
+        """
+            Save the users in a JSON file
+        """
+        dir_path = conf['usersDir']
+        if not os.path.exists(dir_path):
+            self.set_internal_dir(dir_path)
+
+        service_users = self.service.USERS
+
+        users = [service_users[k].serialize() for k in service_users]
+
+        file_path = conf['usersDir'] + '/dump.json'
+        with open(file_path, 'w') as outfile:
+            json.dump(users, outfile)
+            self.set_internal_file_mod(file_path)
+
+    def save_services(self, conf):
+        """
+            Save the services state in a JSON file
+        """
+        dir_path = conf['servicesDir']
+        if not os.path.exists(dir_path):
+            os.mkdir(dir_path)
+            self.set_internal_dir(dir_path)
+
+        services = []
+
+        for k in self.service.SERVICES:
+            s = self.service.SERVICES[k]
+            data = s['data']
+            obj = {'host': data[0], 'port': data[1], 'role': data[2],
+                   'token': k}
+
+            if s['authenticate'] is not False:
+                auth = s['authenticate']
+
+                obj['owner'] = auth['owner']
+                obj['key'] = auth['key']
+
+            services.append(obj)
+
+        file_path = conf['servicesDir'] + '/dump.json'
+        with open(file_path, 'w') as outfile:
+            json.dump(services, outfile)
+            self.set_internal_file_mod(file_path)
 
 
-class BlockChainService(rpyc.Service):
+class BlockChainService(LeaderService):
+    """
+        Implement the blockchain service of the server.
+        Handle both external interaction and the internal system
+    """
     # Shared instance with the server
     BLOCK_CHAIN = []
+    PENDING_BLOCKS = {}
 
     USERS = {}
 
-    def initialize(self):
+    # {{{ Internal
+
+    def initialize(self, conf):
+        """
+            Initialize the blockchain service and set the needed variables
+        """
         if MASTER_IDENTIFIER not in self.USERS:
-            self._create_master_user()
+            self._create_master_user(conf)
+            logger.info('Master user created')
 
         if len(self.BLOCK_CHAIN) == 0:
-            self.BLOCK_CHAIN.append(self._create_genesis_block())
+            self.BLOCK_CHAIN.append(self._create_genesis_block(conf))
+            logger.info('Genesis block generated')
 
-    def _create_master_user(self):
-        sha_passwd = hashlib.sha256()
+    def _create_master_user(self, conf):
+        master_user = User('master', MASTER_IDENTIFIER,
+                           hashlib.sha256().hexdigest(), admin=True)
 
-        self.USERS[MASTER_IDENTIFIER] = User('master', MASTER_IDENTIFIER,
-                                             sha_passwd.hexdigest(),
-                                             admin=True)
+        self.USERS[MASTER_IDENTIFIER] = master_user
 
-    def _create_genesis_block(self):
+    def _create_genesis_block(self, conf):
         master_user = self.USERS[MASTER_IDENTIFIER]
         tx = Transaction(master_user,
                          master_user,
@@ -160,32 +278,206 @@ class BlockChainService(rpyc.Service):
 
         self.BLOCK_CHAIN = BLOCK_CHAIN
 
+    def get_user_from_public_key(self, pub):
+        """
+            Get a user by its public key
+        """
+        for k in self.USERS:
+            if self.USERS[k].public_key == pub:
+                return self.USERS[k]
+        return None
+
+    def get_account_history(self, email):
+        """
+            Get the account history by email author
+        """
+        balance = 0
+        history = OrderedDict()
+        user = self.USERS[email]
+
+        for block in self.BLOCK_CHAIN:
+            for tx in block.tx_list:
+                if tx.rcv == user.public_key:
+                    balance += tx.amount
+                    tx_user = self.get_user_from_public_key(tx.snd)
+                    history[tx.ts] = {
+                        'amount': tx.amount,
+                        'name': tx_user.name,
+                        'email': tx_user.email,
+                        'label': tx.label
+                    }
+                elif tx.snd == user.public_key:
+                    balance -= tx.amount
+                    tx_user = self.get_user_from_public_key(tx.rcv)
+                    history[tx.ts] = {
+                        'amount': -tx.amount,
+                        'name': tx_user.name,
+                        'email': tx_user.email,
+                        'label': tx.label
+                    }
+
+        return {'history': history, 'balance': balance}
+
+    # }}}
+    # {{{ Cluster
+
+    def miner_hash_result(self, miner, response):
+        s_block = response['result']['block']
+        key = (s_block['index'], s_block['ts'], s_block['prev_hash'])
+        if key in self.PENDING_BLOCKS:
+            pending = self.PENDING_BLOCKS.pop(key, None)
+
+            miner_key = (miner['data'][0], miner['data'][1])
+            block = pending[miner_key]
+
+            if not block.check_hash_validity(s_block['nonce'],
+                                             s_block['hash']):
+                logger.warning('Miner %s sent an invalid hash' %
+                               (miner['data'].__str__()))
+                self.PENDING_BLOCKS[key] = pending
+                return
+
+            # Set hash
+            block.set_hash(s_block['nonce'], s_block['hash'])
+            logger.info('Solved by miner %s, good job ! ' %
+                        (miner['data'].__str__()))
+            self.BLOCK_CHAIN.append(block)
+        else:
+            logger.debug('Bad luck, block already solved')
+
+    def send_miner_compute(self, miner, block):
+        try:
+            conn = rpyc.connect(host=miner['data'][0], port=miner['data'][1],
+                                config={'allow_all_attrs': True})
+        except Exception:
+            # TODO fix this part
+            # self.SERVICES.pop(miner)
+            # logger.warning('Connection lost with miner %s' %
+            #                (miner.__str__()))
+            return
+
+        data = block.serialize()
+
+        response = conn.root.compute_hash(data)
+
+        self.miner_hash_result(miner, response)
+
+    def broadcast_miner_compute(self, block):
+        cnt = 0
+        miners = []
+
+        for k in self.SERVICES:
+            s = self.SERVICES[k]
+            # data[2] is the role of the service
+            if s['data'][2] == 'MINER':
+                miners.append(s)
+                cnt += 1
+
+        if cnt == 0:
+            logger.error('No miner service available to procede the \
+                          transaction. Transaction is lost')
+            return False
+
+        pending_block = {}
+        self.PENDING_BLOCKS[(block.index, block.ts, block.prev_hash)] = \
+            pending_block
+
+        for m in miners:
+            miner_block = deepcopy(block)
+
+            pending_block[(m['data'][0], m['data'][1])] = miner_block
+
+            # Owner and key declared
+            if m['authenticate'] is not False:
+                try:
+                    # Add reward for a user, which has a service declared
+                    self.add_reward(m, miner_block)
+                except Exception as e:
+                    logger.info('Reward failed: %s' % (e))
+
+            thr = threading.Thread(target=self.send_miner_compute,
+                                   args=(m, miner_block,))
+            thr.start()
+
+        return True
+
+    # }}}
     # Transaction {{{
 
-    # def handle_transaction(self, author, recipient, amount):
-    #     if recipient not in self.USERS:
-    #         return {'code': 400, 'message': 'Unknown user'}
+    def create_transaction(self, sender, receiver, amount,
+                           label='Transaction'):
+        tx = Transaction(sender, receiver, amount, time.time(), label)
 
-    #     if get_account_history(author)['balance'] < amount:
-    #         return {'code': 400, 'message': 'Unsufficient balance'}
+        if sender.has_allowed_transaction():
+            sender.push_tx(tx)
+            return tx
+        else:
+            logger.info('Sender %s hits the limit number of allowed '
+                        'transaction')
+            return False
 
-    #     res = self.send_coin(USERS[author], USERS[recipient], amount)
+    def add_reward(self, miner, block):
+        """
+            Add a reward, if possible, do not stop the transaction
+        """
+        owner = miner['authenticate']['owner']
 
-    #     if res:
-    #         return {'code': 200,
-    #                 'message': 'Transaction will be added to block'}
-    #     else:
-    #         return {'code': 400,
-    #                 'message': 'Unable to process the transaction'}
+        if owner is not None:
+            if owner not in self.USERS:
+                return
+
+            user = self.USERS[owner]
+
+            if not user.check_service_key(miner):
+                return
+
+        master = self.USERS[MASTER_IDENTIFIER]
+        total_amount = 0
+        for tx in block.tx_list:
+            total_amount += tx.amount
+        reward = max(len(str(total_amount)) - 1, 1)
+
+        tr = self.create_transaction(master, user, reward, label='Reward')
+
+        if not tr:
+            return
+
+        block.tx_list.append(tr)
+
+    def send_coin(self, user_from, user_to, amount, label='Transaction'):
+        last_block = self.BLOCK_CHAIN[len(self.BLOCK_CHAIN) - 1]
+        tx = self.create_transaction(user_from, user_to, amount, label)
+
+        if tx is None:
+            return False
+
+        block = Block(last_block.index + 1, time.time(),
+                      last_block.hash, [tx])
+        return self.broadcast_miner_compute(block)
+
+    def handle_transaction(self, author, recipient, amount):
+        """
+            Handle a transaction from an author to a recipient.
+            Check the balance and then dispatch the transaction
+        """
+        if recipient not in self.USERS:
+            return {'message': 'Unknown user'}, 400
+
+        if self.get_account_history(author)['balance'] < amount:
+            return {'message': 'Unsufficient balance'}, 400
+
+        res = self.send_coin(self.USERS[author], self.USERS[recipient], amount)
+
+        if res:
+            return {'message': 'Transaction will be added to block'}, 200
+        else:
+            return {'message': 'Unable to process the transaction'}, 400
 
     # }}}
     # Users {{{
 
     def _authenticate_master(self, priv):
-        if priv != self.USERS[MASTER_IDENTIFIER].private_key:
-            return False, 'Authentication failed', 400
-
-        return True
+        return priv == self.USERS[MASTER_IDENTIFIER].private_key
 
     def is_user_authenticated(self, token):
         global SECRET_KEY
@@ -195,7 +487,7 @@ class BlockChainService(rpyc.Service):
         now = int(time.time())
 
         if (now - ts) > DEFAULT_EXPIRY:
-            return False, 'Authentication expired', 400
+            return False
 
         b64 = cipher.decrypt(token)
         plain = base64.b64decode(b64)
@@ -204,12 +496,12 @@ class BlockChainService(rpyc.Service):
         user = self.USERS[_json['email']]
 
         if user is None:
-            return False, 'Unknown session', 400
+            return False
 
         if user.is_authenticated(_json['token']):
             return user
         else:
-            return False, 'Fail to authenticate', 400
+            return False
 
     def _create_user(self, name, email, passwd, admin):
         if email not in self.USERS:
@@ -222,22 +514,28 @@ class BlockChainService(rpyc.Service):
 
         return False
 
-    def exposed_master_create_user(self, priv, **kwargs):
-        res, err, code = self._authenticate_master(priv)
+    def exposed_master_create_user(self, priv, *args):
+        res = self._authenticate_master(priv)
 
         if not res:
-            return {'message': err}, code
+            return {'message': 'Authentication failed'}, 400
 
-        if self._create_user(**kwargs):
+        if self._create_user(*args):
             return {'message': 'User successfully created'}, 200
         else:
             return {'message': 'Failed to create the user'}, 400
 
+    def exposed_master_credit(self, priv, recipient, amount):
+        if priv != self.USERS[MASTER_IDENTIFIER].private_key:
+            return {'message': 'Unable to process the transaction'}, 400
+
+        return self.handle_transaction(MASTER_IDENTIFIER, recipient, amount)
+
     def exposed_declare_service(self, token, role):
-        res, err, code = self.is_user_authenticated(token)
+        res = self.is_user_authenticated(token)
 
         if not res:
-            return {'message': err}, code
+            return {'message': 'Authentication failed'}, 400
 
         user = res
 
@@ -247,10 +545,10 @@ class BlockChainService(rpyc.Service):
                 'serviceKey':  service['key']}, 200
 
     def exposed_list_users(self, token):
-        res, err, code = self.is_user_authenticated(token)
+        res = self.is_user_authenticated(token)
 
         if not res:
-            return {'message': err}, code
+            return {'message': 'Authentication failed'}, 400
 
         user = res
 
@@ -260,10 +558,10 @@ class BlockChainService(rpyc.Service):
         return {'users': users}, 200
 
     def exposed_service_refresh_key(self, token, key):
-        res, err, code = self.is_user_authenticated(token)
+        res = self.is_user_authenticated(token)
 
         if not res:
-            return {'message': err}, code
+            return {'message': 'Authentication failed'}, 400
 
         user = res
 
@@ -292,13 +590,12 @@ if __name__ == '__main__':
 
     server = BlockChainServer(BlockChainService(),
                               hostname=hostname, port=conf['port'],
-                              protocol_config={"allow_public_attrs": True,
-                                               "allow_pickle": True})
+                              protocol_config={"allow_pickle": True})
 
-    server.load_blockchain(conf)
+    server.load_state(conf)
 
     def signal_handler(sig, frame):
-        server.save_blockchain(conf)
+        server.save_state(conf)
         sys.exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)

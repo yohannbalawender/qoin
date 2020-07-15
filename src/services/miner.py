@@ -6,9 +6,15 @@ from argparse import ArgumentParser
 
 import rpyc
 
-from src.utils import load_configuration_file
+from src.utils import load_configuration_file, get_logger_by_name
 from src.services.node import Follower
 from src.blockchain import Block, Transaction
+
+# {{{ Logger
+
+logger = get_logger_by_name('miner')
+
+# }}}
 
 
 def get_block_obj(s_block):
@@ -46,7 +52,7 @@ class MinerServer(Follower):
 
 class MinerClient(rpyc.Service):
     def exposed_compute_hash(self, s_block):
-        print '='*20
+        logger.debug('Computing block hash...')
 
         block = get_block_obj(s_block)
 
@@ -56,6 +62,8 @@ class MinerClient(rpyc.Service):
 
     def compute_block_hash(self, block):
         nonce, hash = block.gen_hash()
+        logger.debug('Block nonce found')
+
         block.set_hash(nonce, hash)
 
         return {'block': block.serialize()}
@@ -91,4 +99,8 @@ if __name__ == '__main__':
     except KeyError:
         pass
 
-    server.register()
+    server.register(conf)
+
+    logger.info('Miner up and running')
+
+    server.start()

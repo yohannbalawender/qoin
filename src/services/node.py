@@ -4,17 +4,14 @@ import socket
 import logging
 import hashlib
 
+from src.utils import get_logger_by_name
+
 import rpyc
 from rpyc.utils.server import ThreadedServer
 
 # {{{ Loggers
 
-logger = logging.getLogger('blockchain')
-hdlr = logging.FileHandler('log/blockchain.log')
-
-formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-hdlr.setFormatter(formatter)
-logger.addHandler(hdlr)
+logger = get_logger_by_name('node')
 
 # }}}
 
@@ -63,7 +60,7 @@ class Follower(Node):
         self.leader_host = host
         self.leader_port = port
 
-    def register(self):
+    def register(self, conf):
         """
             A method used to register the follower on the leader
         """
@@ -77,14 +74,14 @@ class Follower(Node):
 
         conn = self._get_connection()
 
-        res, error = conn.root.register(self.leader_host, self.leader_port,
+        res, error = conn.root.register(socket.gethostname(), conf['port'],
                                         self.role)
 
         if not res:
             raise BaseException('Failed to register the follower: %s'
                                 % (error))
 
-        logger.info('Follower successfully registered')
+        logger.info('%s successfully registered' % self.node_name)
 
         conn.close()
 
@@ -98,8 +95,8 @@ class Follower(Node):
         res, error = conn.root.auth_service(owner, key)
 
         if not res:
-            raise BaseException('Failed to authenticate the follower: %s'
-                                % (error))
+            raise BaseException('Failed to authenticate %s: %s'
+                                % (self.node_name, error))
 
         return res
 
@@ -142,7 +139,7 @@ class LeaderService(rpyc.Service):
         try:
             return rpyc.connect(host, port)
         except socket.error:
-            raise Exception('Unable to connect to the follower')
+            raise Exception('Unable to connect to the server')
 
     def exposed_register(self, host, port, role):
         data = (host, int(port), role)
@@ -152,7 +149,7 @@ class LeaderService(rpyc.Service):
                                 'authenticate': False}
 
         logger.info('%s registration succeeded on address %s'
-                    % (role, host + port))
+                    % (role, (host + ':' + str(port))))
 
         return token, ''
 

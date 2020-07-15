@@ -120,14 +120,14 @@ class User(object):
 
         for s in self.services:
             # Check same role
-            if s['role'] != service[2]:
+            if s['role'] != service['data'][2]:
                 continue
 
-            if s['key'] == service[4]:
+            if s['key'] == service['authenticate']['key']:
                 found = True
                 break
 
-        return found and service[3] == self.email
+        return found and service['authenticate']['owner'] == self.email
 
     def push_tx(self, tx):
         if len(self.tx_list) == ALLOWED_TRANSACTION_PER_MIN:
