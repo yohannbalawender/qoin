@@ -9,6 +9,8 @@ from flask_cors import CORS
 import logging
 import json
 
+import rpyc
+
 from src import utils
 
 app = Flask(__name__)
@@ -24,19 +26,19 @@ logger.addHandler(hdlr)
 # {{{ API
 
 class BlockchainApi:
-    def __init__(self):
+    def request_send_coin(self, values):
         global conf
 
-        self.server = conf['server']
+        conn = rpyc.connect(host = conf['server']['ip'], port = conf['server']['port'])
 
-    def request_send_coin(self, values):
-        return requests.post(self.server + '/transaction',
-                             data=json.dumps(values),
-                             headers={'content-type':'application/json'})
+        return conn.root.transaction(values['login'], values['password'], values['recipient'], int(values['amount']))
 
-    def request_account(self, name):
-        return requests.get(self.server + '/account?name=%s' % (name),
-                            headers={'content-type':'application/json'})
+    def request_account(self, login, passwd):
+        global conf
+
+        conn = rpyc.connect(host = conf['server']['ip'], port = conf['server']['port'])
+
+        return conn.root.get_account(login, passwd)
 
 # }}}
 # {{{ Website
@@ -45,15 +47,16 @@ class BlockchainApi:
 def get_account():
     global API
 
-    name = request.args.get('name', type = str)
+    login = request.args.get('login', type = str)
+    password = request.args.get('password', type = str)
 
-    if name is None:
-        return jsonify({'message': 'Name argument must be provided to get the'
-                                   ' account'}), 400
+    if login is None or password is None:
+        return jsonify({'message': 'Login and password arguments must be '
+                                   'provided to get the account'}), 400
 
     logger.debug('Ask for history')
 
-    response = API.request_account(name)
+    response = API.request_account(login, password)
 
     return jsonify(response.json()), response.status_code
 
@@ -63,7 +66,7 @@ def new_transaction():
 
     values = request.form
 
-    required = ['login', 'recipient', 'amount']
+    required = ['login', 'password', 'recipient', 'amount']
     if not all(k in values for k in required):
         return jsonify({'message': 'Error when trying to create transaction'}), 400
 
@@ -72,7 +75,7 @@ def new_transaction():
 
     response = API.request_send_coin(values)
 
-    return jsonify(response.json()), response.status_code
+    return response['message'], response['code']
 
 @app.route('/account')
 def balance():
@@ -99,9 +102,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     conf = utils.load_configuration_file(args.conf)
-
-    conf['server'] = 'http://%s:%s' % (conf['server']['ip'],
-                                       conf['server']['port'])
 
     API = BlockchainApi()
 

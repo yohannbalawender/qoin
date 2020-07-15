@@ -1,9 +1,8 @@
 $(document).ready(() => {
-    // const name = 'ndiaga.dieng@intersec.com'
-    const name = 'yohann.balawender@intersec.com'
-    // const name = 'jean-marc.coic@intersec.com'
-    // const name = 'master@intersec.com'
-    $.get('/account/get', { name }).done((resp) => {
+    const login = 'yohann.balawender@intersec.com'
+    const password = 'yohann'
+
+    $.get('/account/get', { login, password }).done((resp) => {
         const $balance = $('#balance-amount')
 
         $balance.html(resp.account.balance)
