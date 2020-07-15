@@ -38,8 +38,7 @@ class BlockchainApi:
         global conf
 
         conn = rpyc.connect(host = conf['server']['ip'],
-                            port = conf['server']['port'],
-                            config = { 'allow_public_attrs': True })
+                            port = conf['server']['port'])
 
         return conn.root.get_account(login, passwd)
 

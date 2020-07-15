@@ -59,7 +59,10 @@ def create_user(name, email, passwd):
         sha_passwd.update(passwd.encode('utf-8'))
         user = User(name, email, sha_passwd.hexdigest())
         USERS[email] = user
-    return USERS[email]
+
+        return True
+
+    return False
 
 def restore_block_chain_from_json(data):
     for s_block in data:
@@ -242,28 +245,6 @@ class BlockChainService(rpyc.Service):
 
         return None
 
-    def exposed_hash_result(self, s_block):
-        key = (s_block['index'], s_block['ts'], s_block['prev_hash'])
-
-        if key in PENDING_BLOCKS:
-            block = PENDING_BLOCKS[key]
-
-            # TODO verif
-            if not block.check_hash_validity(s_block['nonce'] , s_block['hash']):
-                logging.error('Invalid hash')
-
-                return { 'code': 403, 'message': 'Invalid hash' }
-
-            block.set_hash(s_block['nonce'] , s_block['hash'])
-            # print 'Solved by %s' % request.remote_addr
-            print 'Block solved'
-            PENDING_BLOCKS.pop(key, None)
-            BLOCK_CHAIN.append(block)
-            response = { 'code': 200, 'message': 'Good job!' }
-        else:
-            response = { 'code': '200', 'message': 'Bad luck, block already solved' }
-        return response
-
     def exposed_transaction(self, login, password, recipient, amount):
         res = is_user_authenticated(login, password)
 
@@ -392,6 +373,18 @@ class BlockChainService(rpyc.Service):
         block = Block(last_block.index + 1, time.time(),
                       last_block.hash, [tx])
         return self.broadcast_miner_compute(block)
+
+    # USERS {{{
+
+    def exposed_create_user(self, name, email, passwd):
+        res = create_user(name, email, passwd)
+
+        if res:
+            return { 'code': 200, 'message': 'User successfully created' }
+
+        return { 'code': 400, 'message': 'Failed to create user' }
+
+    # }}}
 
 ###########################################################################
 
