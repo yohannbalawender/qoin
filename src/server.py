@@ -585,7 +585,7 @@ class BlockChainService(rpyc.Service):
 
             return {'code': 201, 'message': 'Successfully authenticated',
                     'token': encrypted, 'email': user.email,
-                    'name': user.name}
+                    'name': user.name, 'services': user.services}
         except AuthenticationError:
             return {'code': 400, 'message': 'Authentication failed'}
         except Exception:

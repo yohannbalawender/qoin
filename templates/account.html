@@ -1,4 +1,11 @@
 {% include "header.html" %}
+
+{% macro option(value, text, role) -%}
+{% set IS_SELECTED = "selected" if value == role else "" %}
+
+<option value="{{ value }}" {{ IS_SELECTED }}>{{ text }}</option>
+{%- endmacro %}
+
 <div class="content-wrapper">
   <div class="row">
     <div class="col-md-12 grid-margin">
@@ -21,19 +28,22 @@
                 <label for="email">Email</label>
                 <input type="text" class="form-control" aria-label="Email" id="email" value="{{ session['email'] }}">
               </div>
-              <!--<div class="form-group">
-                <label for="pwd">Password
-                  <input type="password" class="form-control" aria-label="Password" id="pwd">
-                </label>
-              </div>
               <div class="form-group">
-                <label for="confirm-pwd">Confirm password
-                  <input type="password" class="form-control" aria-label="Confirm password" id="confirm-pwd">
-                </label>
+                {% if 'services' in session %}
+                  <h6>Declared services</h6>
+                  {% for service in session['services'] %}
+                    <div class="service-item">
+                      <label>Key</label>
+                      <input type="text" class="form-control" aria-label="Key" value="{{ service['key'] }}" disabled>
+                      <label>Role</label>
+                      <select class="form-control">
+                        {{ option("MINER", "Miner", service['role']) }}
+                        {{ option("QWINNER", "Qwinner", service['role']) }}
+                      </select>
+                    </div>
+                  {% endfor %}
+                {% endif %}
               </div>
-              <div class="form-group">
-                <button type="submit" class="btn btn-primary mb-2" id="submit-change">Change</button>
-              </div>-->
             </form>
           </div>
         </div>

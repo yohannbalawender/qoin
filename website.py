@@ -85,6 +85,7 @@ def authenticate():
         session['token'] = res['token']
         session['email'] = res['email']
         session['name'] = res['name']
+        session['services'] = res['services']
 
     return jsonify({'message': res['message']}), res['code']
 
