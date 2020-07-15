@@ -11,7 +11,6 @@ class Transaction:
         self.snd    = None
         self.rcv    = None
         self.signature = None
-        self.vk = None
         self.label = label
 
         if sender != None and receiver != None:
@@ -23,7 +22,6 @@ class Transaction:
             sk = ecdsa.SigningKey.from_string(sender.private_key,
                                               curve=ecdsa.SECP256k1)
             self.signature = sk.sign(to_sign)
-            self.vk = sk.get_verifying_key().to_string()
 
     def serialize(self):
         return {
@@ -32,7 +30,6 @@ class Transaction:
             'rcv': base64.b64encode(self.rcv),
             'ts': self.ts,
             'signature': base64.b64encode(self.signature),
-            'vk': base64.b64encode(self.vk),
             'label': self.label
         }
 

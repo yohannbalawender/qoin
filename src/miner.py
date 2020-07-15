@@ -36,7 +36,6 @@ def compute_block_hash(s_block):
         tx.snd = base64.b64decode(s_tx['snd'])
         tx.rcv = base64.b64decode(s_tx['rcv'])
         tx.signature = base64.b64decode(s_tx['signature'])
-        tx.vk = base64.b64decode(s_tx['vk'])
 
         tx_list.append(tx)
 
@@ -59,7 +58,7 @@ def check_block(block):
     valid = True
 
     for s_tx in block['tx_list']:
-        vk_str = base64.b64decode(s_tx['vk'])
+        vk_str = base64.b64decode(s_tx['snd'])
         vk = ecdsa.VerifyingKey.from_string(vk_str, curve=ecdsa.SECP256k1)
 
         msg = '%d%s%s%d' % (s_tx['amount'],

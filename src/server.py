@@ -58,7 +58,6 @@ def restore_block_chain_from_json(data):
             tx.snd = base64.b64decode(s_tx['snd'])
             tx.rcv = base64.b64decode(s_tx['rcv'])
             tx.signature = base64.b64decode(s_tx['signature'])
-            tx.vk = base64.b64decode(s_tx['vk'])
             tx_list.append(tx)
 
         block.index     = s_block['index']
