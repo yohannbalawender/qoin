@@ -92,6 +92,19 @@ def restore_users_from_json(data):
         USERS[user.email] = user
     print '='*20
 
+def restore_services_from_json(data):
+    i = 0
+
+    for s_service in data:
+        if s_service['role'] == 'MINER':
+            MINERS[(s_service['host'], s_service['port'])] = 1
+            i += 1
+        elif s_service['role'] == 'QWINNER':
+            QWINNERS[(s_service['host'], s_service['port'])] = 1
+            i += 1
+
+    print '%d services restored' % i
+
 def load_block_chain():
     filepath = conf['blockchainDir'] + '/dump.json'
     if not os.path.isfile(filepath):
@@ -109,6 +122,15 @@ def load_users():
     with open(filepath) as json_file:
         data = json.load(json_file)
         restore_users_from_json(data)
+
+def load_services():
+    filepath = conf['servicesDir'] + '/dump.json'
+    if not os.path.isfile(filepath):
+        return
+
+    with open(filepath) as json_file:
+        data = json.load(json_file)
+        restore_services_from_json(data)
 
 def save_block_chain():
     if not os.path.exists(conf['blockchainDir']):
@@ -132,11 +154,25 @@ def save_users():
 
     # TODO: right permission on user folder
     with open(conf['usersDir'] + '/dump.json', 'w') as outfile:
-            json.dump(users, outfile)
+        json.dump(users, outfile)
+
+def save_services():
+    if not os.path.exists(conf['servicesDir']):
+        os.mkdir(conf['servicesDir'])
+
+    services = []
+    for m in MINERS:
+        services.append({'host': m[0], 'port': m[1], 'role': 'MINER'})
+    for q in QWINNERS:
+        services.append({'host': q[0], 'port': q[1], 'role': 'QWINNER'})
+
+    with open(conf['servicesDir'] + '/dump.json', 'w') as outfile:
+        json.dump(services, outfile)
 
 def signal_handler(sig, frame):
     save_block_chain()
     save_users()
+    save_services()
     sys.exit(0)
 
 def get_user_from_public_key(pub):
@@ -196,13 +232,6 @@ class BlockChainService(rpyc.Service):
         MINERS[(host, int(port))] = 1
 
         logger.info('Miner registration succeed')
-
-        return None
-
-    def exposed_register_qwinner(self, host, port):
-        QWINNERS[(host, int(port))] = 1
-
-        logger.info('Qwinner registration succeed')
 
         return None
 
@@ -356,6 +385,9 @@ class BlockChainService(rpyc.Service):
             print 'Bad luck, block already solved'
 
     def broadcast_miner_compute(self, block):
+        if len(MINERS) == 0:
+            raise BaseException('No miner service available to procede the transaction. Transaction is lost')
+
         PENDING_BLOCKS[(block.index, block.ts, block.prev_hash)] = block
 
         for miner in MINERS:
@@ -385,6 +417,8 @@ if __name__ == '__main__':
     conf = load_configuration_file(args.conf)
 
     load_users()
+    load_services()
+
     create_user('master', 'master@intersec.com', 'master')
     create_user('ndiaga', 'ndiaga.dieng@intersec.com', 'ndiaga')
     create_user('yohann', 'yohann.balawender@intersec.com', 'yohann')
