@@ -7,13 +7,28 @@ import sys
 import stat
 import json
 import base64
+import time
 from argparse import ArgumentParser
+import hashlib
 
 import rpyc
+from cryptography.fernet import Fernet
 
-from src.utils import load_configuration_file
+from src.utils import load_configuration_file, get_logger_by_name
 from src.services.node import Leader
 from src.blockchain import Block, Transaction
+from src.users import User
+
+# MASTER_IDENTIFIER = 'blockchain-master'
+MASTER_IDENTIFIER = 'master@intersec.com'
+SECRET_KEY = None
+DEFAULT_EXPIRY = 86400 * 90
+
+# Logger {{{
+
+logger = get_logger_by_name('Blockchain server')
+
+# }}}
 
 
 class BlockChainServer(Leader):
@@ -86,7 +101,7 @@ class BlockChainServer(Leader):
         def set_internal_dir(path):
             os.mkdir(path)
             # Read and execute owner permission
-            os.chmod(path, stat.S_IRUSR | stat.S_IXUSR)
+            os.chmod(path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
         def set_internal_file_mod(path):
             # Read and write owner permission
@@ -131,7 +146,7 @@ if __name__ == '__main__':
     except KeyError:
         hostname = socket.gethostname()
 
-    server = BlockChainServer(BlockChainService,
+    server = BlockChainServer(BlockChainService(),
                               hostname=hostname, port=conf['port'],
                               protocol_config={"allow_public_attrs": True,
                                                "allow_pickle": True})
@@ -143,5 +158,7 @@ if __name__ == '__main__':
         sys.exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
+
+    logger.info('Server up and running')
 
     server.start()
