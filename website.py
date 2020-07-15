@@ -8,6 +8,7 @@ from flask import Flask, render_template, jsonify, request
 from flask_cors import CORS
 import logging
 import json
+from copy import deepcopy
 
 import rpyc
 
@@ -36,7 +37,9 @@ class BlockchainApi:
     def request_account(self, login, passwd):
         global conf
 
-        conn = rpyc.connect(host = conf['server']['ip'], port = conf['server']['port'])
+        conn = rpyc.connect(host = conf['server']['ip'],
+                            port = conf['server']['port'],
+                            config = { 'allow_public_attrs': True })
 
         return conn.root.get_account(login, passwd)
 
@@ -58,7 +61,11 @@ def get_account():
 
     response = API.request_account(login, password)
 
-    return jsonify(response.json()), response.status_code
+    # Deep copy because the response is not serializable,
+    # for an unknown reason
+    ac = deepcopy(response['account'])
+
+    return jsonify({ 'account': ac }), response['code']
 
 @app.route('/transaction/new', methods=['POST'])
 def new_transaction():
@@ -75,7 +82,7 @@ def new_transaction():
 
     response = API.request_send_coin(values)
 
-    return response['message'], response['code']
+    return jsonify(response['message']), response['code']
 
 @app.route('/account')
 def balance():

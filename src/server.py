@@ -276,9 +276,12 @@ class BlockChainService(rpyc.Service):
         if get_account_history(login)['balance'] < amount:
             return { 'code': 400, 'message': 'Unsufficient balance' }
 
-        self.send_coin(USERS[login], USERS[recipient], amount, 'Transaction')
+        res = self.send_coin(USERS[login], USERS[recipient], amount, 'Transaction')
 
-        return { 'code': 200, 'message': 'Transaction will be added to block' }
+        if res:
+            return { 'code': 200, 'message': 'Transaction will be added to block' }
+        else:
+            return { 'code': 400, 'message': 'Unable to process the transaction' }
 
     def exposed_history(self, login, password):
         res = is_user_authenticated(login, password)
@@ -369,7 +372,8 @@ class BlockChainService(rpyc.Service):
 
     def broadcast_miner_compute(self, block):
         if len(MINERS) == 0:
-            raise BaseException('No miner service available to procede the transaction. Transaction is lost')
+            logger.error('No miner service available to procede the transaction. Transaction is lost')
+            return False
 
         PENDING_BLOCKS[(block.index, block.ts, block.prev_hash)] = block
 
@@ -378,6 +382,8 @@ class BlockChainService(rpyc.Service):
                                    args=(miner, block,))
             thr.start()
 
+        return True
+
     def send_coin(self, user_from, user_to, amount, label='Transaction'):
         last_block = BLOCK_CHAIN[len(BLOCK_CHAIN) - 1]
         tx = create_transaction(user_from, user_to, amount)
@@ -385,7 +391,7 @@ class BlockChainService(rpyc.Service):
 
         block = Block(last_block.index + 1, time.time(),
                       last_block.hash, [tx])
-        self.broadcast_miner_compute(block)
+        return self.broadcast_miner_compute(block)
 
 ###########################################################################
 
@@ -414,6 +420,9 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
 
     server = ThreadedServer(BlockChainService, hostname = socket.gethostname(),
-                            port = conf['port'])
+                            port = conf['port'],
+                            protocol_config = {"allow_public_attrs" : True,
+                                               "allow_pickle": True })
     server.start()
+
 
