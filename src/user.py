@@ -25,14 +25,19 @@ def random_string(length):
     letters = string.ascii_letters
     return ''.join(random.choice(letters) for i in range(length))
 
+def random_hex(length):
+    """ Generate random string from HEX digits """
+    return ''.join(random.choice(string.hexdigits) for i in range(length))
+
 class User:
     def __init__(self, name, email, passwd,
                  priv = None, pub = None,
-                 salt = ''):
+                 salt = '', services = []):
         self.name = name
         self.email = email
         self.passwd = passwd
         self.salt = salt
+        self.services = services
 
         if priv == None and pub == None:
             sk = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
@@ -50,6 +55,7 @@ class User:
             'private_key': base64.b64encode(self.private_key),
             'public_key': base64.b64encode(self.public_key),
             'salt': self.salt,
+            'services': self.services
         }
 
     def _get_hash(self, to_hash):
@@ -83,6 +89,32 @@ class User:
 
     def is_authenticated(self, token):
         return self._check_token(token)
+
+    def add_user_service(self, service):
+        # Only one service for the time being
+        self.services = [service]
+
+    def declare_service(self, role):
+        key = random_hex(32)
+        service = { 'key': key, 'role': role }
+
+        self.add_user_service(service)
+
+        return service
+
+    def check_service_key(self, service):
+        found = False
+
+        for s in self.services:
+            # Check same role
+            if s['role'] != service[2]:
+                continue
+
+            if s['key'] == service[4]:
+                found = True
+                break
+
+        return found and service[3] == self.email
 
     def __str__(self):
         return 'User: %s [%s]\n      pubKey:%s\n      privKey:#######' %\

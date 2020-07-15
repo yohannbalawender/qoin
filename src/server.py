@@ -114,7 +114,7 @@ def restore_users_from_json(data):
         user = User(s_user['name'], s_user['email'], s_user['passwd'],
                     priv = base64.b64decode(s_user['private_key']),
                     pub = base64.b64decode(s_user['public_key']),
-                    salt = s_user['salt'])
+                    salt = s_user['salt'], services = s_user['services'])
         print user
         USERS[user.email] = user
     print '='*20
@@ -123,7 +123,7 @@ def restore_services_from_json(data):
     i = 0
 
     for s_service in data:
-        SERVICES[(s_service['host'], s_service['port'], s_service['role'])] = 1
+        SERVICES[(s_service['host'], s_service['port'], s_service['role'], s_service['owner'], s_service['key'])] = 1
         i += 1
 
     print '%d services restored' % i
@@ -186,7 +186,7 @@ def save_services():
     services = []
 
     for s in SERVICES:
-        services.append({ 'host': s[0], 'port': s[1], 'role': s[2] })
+        services.append({ 'host': s[0], 'port': s[1], 'role': s[2], 'owner': s[3], 'key': s[4] })
 
     with open(conf['servicesDir'] + '/dump.json', 'w') as outfile:
         json.dump(services, outfile)
@@ -266,12 +266,23 @@ class BlockChainService(rpyc.Service):
     def on_disconnect(self, conn):
         print 'Connection closed'
 
-    def exposed_register_miner(self, host, port):
-        SERVICES[(host, int(port), 'MINER')] = 1
+    def exposed_register_miner(self, host, port, owner, key):
+        service = (host, int(port), 'MINER', owner, key)
+
+        if owner is not None:
+            if owner not in USERS:
+                return False, 'Unknown user'
+
+            user = USERS[owner]
+
+            if not user.check_service_key(service):
+                return False, 'Invalid key'
+
+        SERVICES[service] = 1
 
         logger.info('Miner registration succeed')
 
-        return None
+        return True, ''
 
     def exposed_register_qwinner(self, host, port):
         SERVICES[(host, int(port), 'QWINNER')] = 1
@@ -481,6 +492,18 @@ class BlockChainService(rpyc.Service):
             return { 'code': 200, 'message': 'User successfully created' }
 
         return { 'code': 400, 'message': 'Failed to create user' }
+
+    def exposed_declare_service(self, token, role):
+        err = []
+        user = is_user_authenticated(token, err)
+
+        if err:
+            return err[0]
+
+        service = user.declare_service(role)
+
+        return { 'code': 200, 'message': 'Service declared successfully',
+                 'serviceKey':  service['key'] }
 
     def exposed_list_users(self, token):
         err = []

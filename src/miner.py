@@ -30,16 +30,24 @@ class MinerServer(ThreadedServer):
         self.server_host = host
         self.server_port = port
 
+    def set_credentials(self, credentials):
+        self.credentials = (credentials['owner'], credentials['key'])
+
     def register(self):
         if self.server_host is None or self.server_port is None:
             raise BaseException('Cannot register on an unknown server')
 
         conn = self.get_connection()
 
-        res = conn.root.register_miner(self.host, self.port)
+        try:
+            owner, key = self.credentials
+        except AttributeError:
+            owner = key = None
 
-        if res is not None:
-            raise BaseException('Failed to register miner')
+        res, error = conn.root.register_miner(self.host, self.port, owner, key)
+
+        if not res:
+            raise BaseException('Failed to register miner: %s' % (error))
         else:
             print 'Miner successfully registered'
 
@@ -118,6 +126,13 @@ if __name__ == '__main__':
                          port = client_port)
 
     server.set_server_addr(server_host, server_port)
+
+    try:
+        credentials = conf['credentials']
+
+        server.set_credentials(credentials)
+    except KeyError:
+        pass
 
     server.register()
 
