@@ -4,13 +4,13 @@ $(document).ready(() => {
         const $amountGroup = $('#amount-grp')
         const $amount = $('#amount')
         const recipient = $recipient.val()
-        const amount = $amount.val()
+        const amount = parseFloat($amount.val(), 10)
 
         let valid = true
 
         $amountGroup.removeClass('has-danger')
 
-        if (amount <= 0) {
+        if (amount <= 0 || !Number.isInteger(amount)) {
             $amountGroup.addClass('has-danger')
 
             valid = false

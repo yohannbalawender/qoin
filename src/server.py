@@ -12,6 +12,7 @@ from argparse import ArgumentParser
 import base64
 from collections import OrderedDict
 import threading
+from copy import deepcopy
 
 import signal
 import sys
@@ -48,21 +49,25 @@ def init(conf):
     if SECRET_KEY is None:
         raise Exception('Missing key')
 
+
 def dump_block_chain():
     for block in BLOCK_CHAIN:
         print block
 
-def create_transaction(sender, receiver, amount):
-    return Transaction(sender, receiver, amount, time.time())
+
+def create_transaction(sender, receiver, amount, label='Transaction'):
+    return Transaction(sender, receiver, amount, time.time(), label)
+
 
 def create_genesis_block():
-    tx    = Transaction(USERS['master@intersec.com'],
-                        USERS['master@intersec.com'],
-                        conf['defaultGenesisAmount'], time.time())
+    tx = Transaction(USERS['master@intersec.com'],
+                     USERS['master@intersec.com'],
+                     conf['defaultGenesisAmount'], time.time())
     block = Block(0, time.time(), None, [tx])
     nonce, hash = block.gen_hash()
     block.set_hash(nonce, hash)
     return block
+
 
 def create_user(name, email, passwd):
     if email not in USERS:
@@ -276,7 +281,7 @@ class BlockChainService(rpyc.Service):
             user = USERS[owner]
 
             if not user.check_service_key(service):
-                return False, 'Invalid key'
+                return False, 'Invalid key or service not found'
 
         SERVICES[service] = 1
 
@@ -405,16 +410,20 @@ class BlockChainService(rpyc.Service):
         s_block = response['result']['block']
         key = (s_block['index'], s_block['ts'], s_block['prev_hash'])
         if key in PENDING_BLOCKS:
-            block = PENDING_BLOCKS[key]
+            pending = PENDING_BLOCKS.pop(key, None)
+
+            miner_key = (miner[0], miner[1])
+            block = pending[miner_key]
 
             # TODO verif
-            if not block.check_hash_validity(s_block['nonce'] , s_block['hash']):
+            if not block.check_hash_validity(s_block['nonce'], s_block['hash']):
                 print 'Miner %s sent an invalid hash' % (miner.__str__())
+                PENDING_BLOCKS[key] = pending
                 return
 
-            block.set_hash(s_block['nonce'] , s_block['hash'])
+            # Set hash
+            block.set_hash(s_block['nonce'], s_block['hash'])
             print 'Solved by miner %s, good job ! ' % (miner.__str__())
-            PENDING_BLOCKS.pop(key, None)
             BLOCK_CHAIN.append(block)
         else:
             print 'Bad luck, block already solved'
@@ -433,19 +442,51 @@ class BlockChainService(rpyc.Service):
             logger.error('No miner service available to procede the transaction. Transaction is lost')
             return False
 
-        PENDING_BLOCKS[(block.index, block.ts, block.prev_hash)] = block
+        pending_block = {}
+        PENDING_BLOCKS[(block.index, block.ts, block.prev_hash)] = pending_block
 
         for m in miners:
+            miner_block = deepcopy(block)
+
+            pending_block[(m[0], m[1])] = miner_block
+
+            # Owner and key declared
+            if len(m) > 3:
+                try:
+                    # Add reward for a user, which has a service declared
+                    self.add_reward(m, miner_block)
+                except:
+                    pass
+
             thr = threading.Thread(target=self.send_miner_compute,
-                                   args=(m, block,))
+                                   args=(m, miner_block,))
             thr.start()
 
         return True
 
+    def add_reward(self, miner, block):
+        owner = miner[3]
+
+        if owner is not None:
+            if owner not in USERS:
+                return False, 'Unknown user'
+
+            user = USERS[owner]
+
+            if not user.check_service_key(miner):
+                return False, 'Invalid key or service not found'
+
+        master = USERS['master@intersec.com']
+
+        tr = create_transaction(master, user, 1, label='Reward')
+
+        block.tx_list.append(tr)
+
+        return True, 'Reward OK'
+
     def send_coin(self, user_from, user_to, amount, label='Transaction'):
         last_block = BLOCK_CHAIN[len(BLOCK_CHAIN) - 1]
-        tx = create_transaction(user_from, user_to, amount)
-        tx.label = label
+        tx = create_transaction(user_from, user_to, amount, label)
 
         block = Block(last_block.index + 1, time.time(),
                       last_block.hash, [tx])
