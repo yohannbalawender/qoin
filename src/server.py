@@ -366,6 +366,9 @@ class BlockChainService(rpyc.Service):
         return True
 
     def send_coin(self, user_from, user_to, amount, label='Transaction'):
+        if user_to.email == 'master@intersec.com':
+            return False
+
         last_block = BLOCK_CHAIN[len(BLOCK_CHAIN) - 1]
         tx = create_transaction(user_from, user_to, amount)
         tx.label = label
