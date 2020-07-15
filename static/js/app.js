@@ -58,12 +58,12 @@ $(document).ready(() => {
             return false
         }
 
-        $.post('/transaction/new', { sender, recipient, amount }).done(() => {
+        $.post('/transaction/new', { login, password, recipient, amount }).done(() => {
         })
     })
 
     $('#submit-account').click((e) => {
-        const name = $('.account-name').find('input').val()
+        const login = $('.account-name').find('input').val()
 
         const $info = $('.account-info')
         const $balance = $('.balance')
@@ -71,7 +71,7 @@ $(document).ready(() => {
         $info.addClass('hidden')
         $balance.empty()
 
-        $.get('/account/get', { name }).done((resp) => {
+        $.get('/account/get', { login }).done((resp) => {
             $info.removeClass('hidden')
 
             $balance.html(resp.account.balance)

@@ -18,6 +18,7 @@ from collections import OrderedDict
 import signal
 import sys
 import os
+import hashlib
 ############################################################################
 conf = {}
 BLOCK_CHAIN = []
@@ -42,9 +43,11 @@ def create_genesis_block():
     block.set_hash(nonce, hash)
     return block
 
-def create_user(name, email):
+def create_user(name, email, passwd):
     if email not in USERS:
-        user = User(name, email)
+        sha_passwd = hashlib.sha256()
+        sha_passwd.update(passwd.encode('utf-8'))
+        user = User(name, email, sha_passwd.hexdigest())
         USERS[email] = user
     return USERS[email]
 
@@ -72,7 +75,7 @@ def restore_block_chain_from_json(data):
 
 def restore_users_from_json(data):
     for s_user in data:
-        user = User(s_user['name'], s_user['email'],
+        user = User(s_user['name'], s_user['email'], s_user['passwd'],
                     base64.b64decode(s_user['private_key']),
                     base64.b64decode(s_user['public_key']))
         print user
@@ -117,6 +120,7 @@ def save_users():
     for k in USERS:
         users.append(USERS[k].serialize())
 
+    # TODO: right permission on user folder
     with open(conf['usersDir'] + '/dump.json', 'w') as outfile:
             json.dump(users, outfile)
 
@@ -149,6 +153,17 @@ def get_user_from_public_key(pub):
     for k in USERS:
         if USERS[k].public_key == pub:
             return USERS[k]
+    return None
+
+def is_user_authenticated(login, password):
+    if login not in USERS:
+        return jsonify({'message': 'Unknown user'}), 400
+
+    user = USERS[login]
+
+    if not user.authenticate(password):
+        return jsonify({'message': 'Authentication failed'}), 400
+
     return None
 
 def get_account_history(user_email):
@@ -238,49 +253,71 @@ def register_qwinner():
 @app.route('/transaction', methods=['POST'])
 def transaction():
     req = request.get_json()
-    sender = req['sender']
+
+    sender = req['login']
+    password = req['password']
+
     recepient = req['recipient']
     amount = int(req['amount'])
 
-    if sender not in USERS or recepient not in USERS:
+    res =  is_user_authenticated(sender, password)
+
+    if res is not None:
+        return res
+
+    if recepient not in USERS:
         return jsonify({'message': 'Unknown user'}), 400
 
     if get_account_history(sender)['balance'] < amount:
         return jsonify({'message': 'Unsufficient balance'}), 400
 
-    send_coin(USERS[sender], USERS[recepient], amount, 'Transaction')
+    send_coin(sender_user, USERS[recepient], amount, 'Transaction')
 
-    # TODO Check if transaction succeed
     response = {'message': 'Transaction will be added to block'}
 
     return jsonify(response), 200
 
 @app.route('/balance', methods=['GET'])
 def balance():
-    name = request.args.get("name")
-    balance = get_account_history(name)['balance']
+    login = request.args.get("login")
+    password = request.args.get("password")
 
-    # TODO Check if transaction succeed
+    res =  is_user_authenticated(login, password)
+
+    if res is not None:
+        return res
+
+    balance = get_account_history(login)['balance']
 
     response = { 'balance': balance }
     return jsonify(response)
 
 @app.route('/history', methods=['GET'])
 def history():
-    name = request.args.get("name")
-    history = get_account_history(name)['history']
+    login = request.args.get("login")
+    password = request.args.get("password")
 
-    # TODO Check if transaction succeed
+    res =  is_user_authenticated(login, password)
+
+    if res is not None:
+        return res
+
+    history = get_account_history(login)['history']
 
     response = { 'history': history }
     return jsonify(response)
 
 @app.route('/account', methods=['GET'])
 def get_account():
-    name = request.args.get("name")
-    account = get_account_history(name)
+    login = request.args.get("login")
+    password = request.args.get("password")
 
-    # TODO Check if transaction succeed
+    res =  is_user_authenticated(login, password)
+
+    if res is not None:
+        return res
+
+    account = get_account_history(login)
 
     response = {'account': account}
     return jsonify(response)
@@ -310,10 +347,10 @@ if __name__ == '__main__':
     conf = load_configuration_file(args.conf)
 
     load_users()
-    master = create_user('master', 'master@intersec.com')
-    ndiaga = create_user('ndiaga', 'ndiaga.dieng@intersec.com')
-    yohann  = create_user('yohann', 'yohann.balawender@intersec.com')
-    jm  = create_user('jeanmarc', 'jean-marc.coic@intersec.com')
+    create_user('master', 'master@intersec.com', 'master')
+    create_user('ndiaga', 'ndiaga.dieng@intersec.com', 'ndiaga')
+    create_user('yohann', 'yohann.balawender@intersec.com', 'yohann')
+    create_user('jeanmarc', 'jean-marc.coic@intersec.com', 'jeanmarc')
 
     load_block_chain()
     if len(BLOCK_CHAIN) == 0:

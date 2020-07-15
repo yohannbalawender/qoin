@@ -63,7 +63,7 @@ def new_transaction():
 
     values = request.form
 
-    required = ['sender', 'recipient', 'amount']
+    required = ['login', 'recipient', 'amount']
     if not all(k in values for k in required):
         return jsonify({'message': 'Error when trying to create transaction'}), 400
 
