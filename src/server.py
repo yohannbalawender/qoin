@@ -316,7 +316,7 @@ class BlockChainService(rpyc.Service):
         if priv != USERS[email].private_key:
             return { 'code': 400, 'message': 'Unable to process the transaction' }
 
-        self.handle_transaction(email, recipient, amount)
+        return self.handle_transaction(email, recipient, amount)
 
     def exposed_transaction(self, token, recipient, amount):
         err = []
@@ -477,8 +477,12 @@ class BlockChainService(rpyc.Service):
                 return False, 'Invalid key or service not found'
 
         master = USERS['master@intersec.com']
+        total_amount = 0
+        for tx in block.tx_list:
+            total_amount += tx.amount
+        reward = max(len(str(total_amount)) - 1, 1)
 
-        tr = create_transaction(master, user, 1, label='Reward')
+        tr = create_transaction(master, user, reward, label='Reward')
 
         block.tx_list.append(tr)
 
