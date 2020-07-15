@@ -5,24 +5,21 @@
 from flask import Flask, render_template, jsonify, request, session
 from flask_session import Session
 from flask_cors import CORS, cross_origin
-import logging
 from copy import deepcopy
 import socket
 
 import rpyc
 
-from src import utils
+from src.utils import load_configuration_file, get_logger_by_name
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
-logger = logging.getLogger('blockchain')
-hdlr = logging.FileHandler('log/blockchain.log')
+# {{{ Logger
 
-formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-hdlr.setFormatter(formatter)
-logger.addHandler(hdlr)
+logger = get_logger_by_name('website')
 
+# }}}
 # {{{ API
 
 
@@ -215,7 +212,7 @@ if __name__ == '__main__':
                         help='website configuration file')
 
     args = parser.parse_args()
-    conf = utils.load_configuration_file(args.conf)
+    conf = load_configuration_file(args.conf)
 
     app.config.update(
         SECRET_KEY=conf['secretKey'],

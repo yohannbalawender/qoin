@@ -1,3 +1,3 @@
 #!/usr/bin/python
 
-from .user import User
+from .user import User, AuthenticationError

@@ -151,7 +151,7 @@ class LeaderService(rpyc.Service):
         logger.info('%s registration succeeded on address %s'
                     % (role, (host + ':' + str(port))))
 
-        return token, ''
+        return token, 200
 
     def exposed_auth_service(self, token, owner, key):
         service = self.SERVICES[token]
@@ -165,16 +165,14 @@ class LeaderService(rpyc.Service):
         logger.info('Follower %s successfully authenticated'
                     % (service.data.__str__()))
 
-        return True, ''
+        return True, 200
 
     def forget(self, token):
-        service = self.SERVICES[token]
+        service = self.SERVICES.pop(token)
 
         if service is None:
             return False, 'Could not find follower to forget'
 
-        self.SERVICES[service] = None
-
-        return True, ''
+        return True, 200
 
     # }}}

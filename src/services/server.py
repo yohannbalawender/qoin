@@ -20,7 +20,7 @@ from cryptography.fernet import Fernet
 from src.utils import load_configuration_file, get_logger_by_name
 from src.services.node import Leader, LeaderService
 from src.blockchain import Block, Transaction
-from src.users import User
+from src.users import User, AuthenticationError
 
 MASTER_IDENTIFIER = 'blockchain-master'
 SECRET_KEY = None
@@ -39,9 +39,6 @@ class BlockChainServer(Leader):
     """
     node_name = "Blockchain server"
     BLOCK_CHAIN = []
-
-    def _add_block(self, block):
-        self.BLOCK_CHAIN.append(block)
 
     def _load_block(self, s_block, prev_hash):
         def _add_transaction_list(s_block):
@@ -77,7 +74,7 @@ class BlockChainServer(Leader):
                                     'hash is invalid')
 
         logger.info(block)
-        self.BLOCK_CHAIN.append(block)
+        self.service.BLOCK_CHAIN.append(block)
 
         return s_block['hash']
 
@@ -174,7 +171,7 @@ class BlockChainServer(Leader):
             self.set_internal_dir(dir_path)
 
         blocks = []
-        for block in self.BLOCK_CHAIN:
+        for block in self.service.BLOCK_CHAIN:
             blocks.append(block.serialize())
 
         file_path = conf['blockchainDir'] + '/dump.json'
@@ -235,11 +232,12 @@ class BlockChainService(LeaderService):
         Implement the blockchain service of the server.
         Handle both external interaction and the internal system
     """
-    # Shared instance with the server
     BLOCK_CHAIN = []
     PENDING_BLOCKS = {}
 
     USERS = {}
+
+    SECRET_KEY = None
 
     # {{{ Internal
 
@@ -254,6 +252,8 @@ class BlockChainService(LeaderService):
         if len(self.BLOCK_CHAIN) == 0:
             self.BLOCK_CHAIN.append(self._create_genesis_block(conf))
             logger.info('Genesis block generated')
+
+        self.SECRET_KEY = conf['secretKey'].encode('ascii')
 
     def _create_master_user(self, conf):
         master_user = User('master', MASTER_IDENTIFIER,
@@ -345,15 +345,15 @@ class BlockChainService(LeaderService):
         else:
             logger.debug('Bad luck, block already solved')
 
-    def send_miner_compute(self, miner, block):
+    def send_miner_compute(self, token, miner, block):
         try:
-            conn = rpyc.connect(host=miner['data'][0], port=miner['data'][1],
-                                config={'allow_all_attrs': True})
+            conn = rpyc.connect(host=miner['data'][0], port=miner['data'][1])
         except Exception:
-            # TODO fix this part
-            # self.SERVICES.pop(miner)
-            # logger.warning('Connection lost with miner %s' %
-            #                (miner.__str__()))
+            logger.warning('Connection lost with miner %s' %
+                           (miner['data'].__str__()))
+            key = (block.index, block.ts, block.prev_hash)
+            self.PENDING_BLOCKS.pop(key)
+            self.forget(token)
             return
 
         data = block.serialize()
@@ -364,13 +364,13 @@ class BlockChainService(LeaderService):
 
     def broadcast_miner_compute(self, block):
         cnt = 0
-        miners = []
+        miners_token = []
 
         for k in self.SERVICES:
             s = self.SERVICES[k]
             # data[2] is the role of the service
             if s['data'][2] == 'MINER':
-                miners.append(s)
+                miners_token.append(k)
                 cnt += 1
 
         if cnt == 0:
@@ -382,7 +382,8 @@ class BlockChainService(LeaderService):
         self.PENDING_BLOCKS[(block.index, block.ts, block.prev_hash)] = \
             pending_block
 
-        for m in miners:
+        for k in miners_token:
+            m = self.SERVICES[k]
             miner_block = deepcopy(block)
 
             pending_block[(m['data'][0], m['data'][1])] = miner_block
@@ -393,10 +394,10 @@ class BlockChainService(LeaderService):
                     # Add reward for a user, which has a service declared
                     self.add_reward(m, miner_block)
                 except Exception as e:
-                    logger.info('Reward failed: %s' % (e))
+                    logger.warning('Reward failed: %s' % (e))
 
             thr = threading.Thread(target=self.send_miner_compute,
-                                   args=(m, miner_block,))
+                                   args=(k, m, miner_block,))
             thr.start()
 
         return True
@@ -473,16 +474,88 @@ class BlockChainService(LeaderService):
         else:
             return {'message': 'Unable to process the transaction'}, 400
 
+    def exposed_history(self, token):
+        res = self.is_user_authenticated(token)
+
+        if not res:
+            return {'message': 'Authentication failed'}, 400
+
+        user = res
+
+        history = self.get_account_history(user.email)['history']
+
+        return {'history': history}, 200
+
+    def exposed_get_account(self, token):
+        res = self.is_user_authenticated(token)
+
+        if not res:
+            return {'message': 'Authentication failed'}, 400
+
+        user = res
+
+        account = self.get_account_history(user.email)
+
+        return {'account': account}, 200
+
+    def exposed_get_balance(self, token):
+        res = self.is_user_authenticated(token)
+
+        if not res:
+            return {'message': 'Authentication failed'}, 400
+
+        user = res
+
+        balance = self.get_account_history(user.email)['balance']
+
+        return {'balance': balance}, 200
+
     # }}}
     # Users {{{
+
+    def exposed_authenticate_user(self, email, passwd):
+        """
+            Allow to authenticate as a user of the blockchain
+        """
+        user = None
+
+        for k in self.USERS:
+            if self.USERS[k].email == email:
+                user = self.USERS[k]
+                break
+
+        if user is None:
+            return {'message': 'Unknown user'}, 400
+
+        try:
+            res = user.authenticate(passwd)
+
+            token = {
+                'email': user.email,
+                'token': res
+            }
+
+            _str = json.dumps(token)
+
+            b64 = base64.b64encode(_str)
+
+            cipher = Fernet(self.SECRET_KEY)
+            encrypted = cipher.encrypt(b64)
+
+            return {'message': 'Successfully authenticated',
+                    'token': encrypted, 'email': user.email,
+                    'name': user.name, 'services': user.services}, 201
+        except AuthenticationError:
+            return {'message': 'Authentication failed'}, 400
+        except Exception:
+            return {'message': 'Unknown error while trying to authenticate'}, \
+                    400
 
     def _authenticate_master(self, priv):
         return priv == self.USERS[MASTER_IDENTIFIER].private_key
 
     def is_user_authenticated(self, token):
-        global SECRET_KEY
-
-        cipher = Fernet(SECRET_KEY)
+        cipher = Fernet(self.SECRET_KEY)
         ts = cipher.extract_timestamp(token)
         now = int(time.time())
 
@@ -527,7 +600,7 @@ class BlockChainService(LeaderService):
 
     def exposed_master_credit(self, priv, recipient, amount):
         if priv != self.USERS[MASTER_IDENTIFIER].private_key:
-            return {'message': 'Unable to process the transaction'}, 400
+            return {'message': 'Authentication failed'}, 400
 
         return self.handle_transaction(MASTER_IDENTIFIER, recipient, amount)
 

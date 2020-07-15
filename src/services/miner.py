@@ -87,7 +87,7 @@ if __name__ == '__main__':
     leader_port = conf['leader']['port']
     client_port = conf['port']
 
-    server = MinerServer(MinerClient, hostname=socket.gethostname(),
+    server = MinerServer(MinerClient(), hostname=socket.gethostname(),
                          port=client_port)
 
     server.set_leader_addr(leader_host, leader_port)
