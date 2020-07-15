@@ -36,8 +36,7 @@ DEFAULT_EXPIRY = 86400 * 90
 conf = {}
 BLOCK_CHAIN = []
 USERS = {}
-MINERS = {}
-QWINNERS = {}
+SERVICES = {}
 PENDING_BLOCKS = {}
 SECRET_KEY = None
 
@@ -124,12 +123,8 @@ def restore_services_from_json(data):
     i = 0
 
     for s_service in data:
-        if s_service['role'] == 'MINER':
-            MINERS[(s_service['host'], s_service['port'])] = 1
-            i += 1
-        elif s_service['role'] == 'QWINNER':
-            QWINNERS[(s_service['host'], s_service['port'])] = 1
-            i += 1
+        SERVICES[(s_service['host'], s_service['port'], s_service['role'])] = 1
+        i += 1
 
     print '%d services restored' % i
 
@@ -189,10 +184,9 @@ def save_services():
         os.mkdir(conf['servicesDir'])
 
     services = []
-    for m in MINERS:
-        services.append({'host': m[0], 'port': m[1], 'role': 'MINER'})
-    for q in QWINNERS:
-        services.append({'host': q[0], 'port': q[1], 'role': 'QWINNER'})
+
+    for s in SERVICES:
+        services.append({ 'host': s[0], 'port': s[1], 'role': s[2] })
 
     with open(conf['servicesDir'] + '/dump.json', 'w') as outfile:
         json.dump(services, outfile)
@@ -273,14 +267,14 @@ class BlockChainService(rpyc.Service):
         print 'Connection closed'
 
     def exposed_register_miner(self, host, port):
-        MINERS[(host, int(port))] = 1
+        SERVICES[(host, int(port), 'MINER')] = 1
 
         logger.info('Miner registration succeed')
 
         return None
 
     def exposed_register_qwinner(self, host, port):
-        QWINNERS[(host, int(port))] = 1
+        SERVICES[(host, int(port), 'QWINNER')] = 1
 
         logger.info('Qwinner registration succeed')
 
@@ -367,7 +361,10 @@ class BlockChainService(rpyc.Service):
 
     def get_data_reward(self, data):
         # TODO: choose the right Qwinner
-        qwinner = QWINNERS.keys()[0]
+        for s in SERVICES:
+            if s[2] == 'QWINNER':
+                qwinner = s
+                break
 
         try:
             conn = rpyc.connect(host = qwinner[0], port = qwinner[1], config = { 'allow_all_attrs': True })
@@ -383,7 +380,7 @@ class BlockChainService(rpyc.Service):
         try:
             conn = rpyc.connect(host = miner[0], port = miner[1], config = { 'allow_all_attrs': True })
         except:
-            MINERS.pop(miner)
+            SERVICES.pop(miner)
             print 'Connection lost with miner %s' % (miner.__str__())
             return
 
@@ -412,15 +409,24 @@ class BlockChainService(rpyc.Service):
             print 'Bad luck, block already solved'
 
     def broadcast_miner_compute(self, block):
-        if len(MINERS) == 0:
+        cnt = 0
+        miners = []
+
+        for s in SERVICES:
+            # s[2] is the role of the service
+            if s[2] == 'MINER':
+                miners.append(s)
+                cnt += 1
+
+        if cnt == 0:
             logger.error('No miner service available to procede the transaction. Transaction is lost')
             return False
 
         PENDING_BLOCKS[(block.index, block.ts, block.prev_hash)] = block
 
-        for miner in MINERS:
+        for m in miners:
             thr = threading.Thread(target=self.send_miner_compute,
-                                   args=(miner, block,))
+                                   args=(m, block,))
             thr.start()
 
         return True
