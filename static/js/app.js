@@ -103,4 +103,15 @@ $(document).ready(() => {
 
         e.preventDefault()
     })
+
+    $.post('/users/list', { })
+    .done((users) => {
+        var $recipient = $('#recipient')
+
+        users.forEach((u) => {
+            var html = `<option value="${ u.email }">${ u.name } (${ u.email })</option>`
+
+            $recipient.append(html)
+        })
+    })
 })

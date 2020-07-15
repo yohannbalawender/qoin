@@ -51,6 +51,17 @@ class BlockchainApi:
 
         return conn.root.get_account(token)
 
+    def request_list_users(self, token):
+        conn = self.get_connection()
+
+        response = conn.root.list_users(token)
+
+        # By default, exclude master from API
+        if 'users' in response:
+            response['users'] = [u for u in response['users'] if u['email'] != 'master@intersec.com']
+
+        return response
+
 # }}}
 # {{{ Website
 
@@ -113,6 +124,19 @@ def new_transaction():
     response = API.request_send_coin(session['token'], values)
 
     return jsonify(response['message']), response['code']
+
+@app.route('/users/list', methods=['POST'])
+@cross_origin()
+def list_users():
+    global API
+
+    response = API.request_list_users(session['token'])
+
+    if 'users' in response:
+        return jsonify(response['users']), response['code']
+
+    return jsonify({ 'message': response['message'] }), response['code']
+
 
 @app.route('/account')
 def balance():

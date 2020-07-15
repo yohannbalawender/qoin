@@ -464,6 +464,18 @@ class BlockChainService(rpyc.Service):
 
         return { 'code': 400, 'message': 'Failed to create user' }
 
+    def exposed_list_users(self, token):
+        err = []
+        user = is_user_authenticated(token, err)
+
+        if err:
+            return err[0]
+
+        users = [{ 'name': USERS[k].name, 'email': USERS[k].email }
+                 for k in USERS if USERS[k].email != user.email]
+
+        return { 'code': 200, 'users': users }
+
     # }}}
 
 ###########################################################################
