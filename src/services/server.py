@@ -304,7 +304,8 @@ class BlockChainService(LeaderService):
                         'amount': tx.amount,
                         'name': tx_user.name,
                         'email': tx_user.email,
-                        'label': tx.label
+                        'label': tx.label,
+                        'ts': tx.ts
                     }
                 elif tx.snd == user.public_key:
                     balance -= tx.amount
@@ -313,7 +314,8 @@ class BlockChainService(LeaderService):
                         'amount': -tx.amount,
                         'name': tx_user.name,
                         'email': tx_user.email,
-                        'label': tx.label
+                        'label': tx.label,
+                        'ts': tx.ts
                     }
 
         return {'history': history, 'balance': balance}

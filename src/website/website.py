@@ -212,6 +212,10 @@ def service_refresh_key():
 def get_services_status():
     global API
 
+    if 'token' not in session:
+        return jsonify({'message': 'Unknown session, \
+                                    cannot get the account'}), 400
+
     response, code = API.get_services_status(session['token'])
 
     if 'statuses' in response:

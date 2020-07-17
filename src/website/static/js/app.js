@@ -1,3 +1,26 @@
+/* App JS file */
+
+var formatDate = (date) => {
+    let month = date.getMonth() + 1
+    let minute = date.getMinutes()
+    let day = date.getDate()
+
+    if (day < 10) {
+        day = '0' + day
+    }
+
+    if (month < 10) {
+        month = '0' + month
+    }
+
+    if (minute < 10) {
+        minute = '0' + minute
+    }
+
+    return day + '/' + month + '/' + date.getFullYear() + ' ' +
+           date.getHours() + ':' + minute
+}
+
 $(document).ready(() => {
     $('#submit-tr').click((e) => {
         const $recipient = $('#recipient')
@@ -5,6 +28,7 @@ $(document).ready(() => {
         const $amount = $('#amount')
         const recipient = $recipient.val()
         const amount = parseFloat($amount.val(), 10)
+        const el = e.currentTarget
 
         let valid = true
 
@@ -17,6 +41,7 @@ $(document).ready(() => {
         }
 
         e.preventDefault()
+        $(el).prop('disabled', true)
 
         if (!valid) {
             return false
@@ -26,6 +51,7 @@ $(document).ready(() => {
             window.notification.show('success', { msg: 'Transaction submitted' , dismiss: true })
 
             $amount.val('')
+            $(el).prop('disabled', false)
         })
     })
 
@@ -38,27 +64,6 @@ $(document).ready(() => {
 
         $tbody.empty()
         const history = resp.account.history
-
-        const formatDate = (date) => {
-            let month = date.getMonth() + 1
-            let minute = date.getMinutes()
-            let day = date.getDate()
-
-            if (day < 10) {
-                day = '0' + day
-            }
-
-            if (month < 10) {
-                month = '0' + month
-            }
-
-            if (minute < 10) {
-                minute = '0' + minute
-            }
-
-            return day + '/' + month + '/' + date.getFullYear() + ' ' +
-                   date.getHours() + ':' + minute
-        }
 
         Object.keys(history).reverse().forEach((k, i) => {
             const date = new Date(parseFloat(k) * 1000)
@@ -270,27 +275,82 @@ window.notification = notification
 /* Worker */
 var wk = new Worker('/static/js/worker.js')
 
-wk.onmessage = function(data) {
-    var scope = data.scope
+/* {{{ Worker scope */
+
+var updateDropdown = function(hasNewTrs) {
+    const dropdown = document.querySelector('#notificationDropdown')
+    const content = document.querySelector('#notificationDropdownContent')
+    const contentItem = content.getElementsByTagName('a') 
+    const coll = dropdown.getElementsByTagName('span')
+
+    /* No span yet & new tr */
+    if (contentItem.length) {
+        const span = document.createElement('span')
+        span.classList = 'count'
+
+        dropdown.append(span)
+    } else {
+        let i
+
+        while (i = coll.item(0)) {
+            i.remove()
+        }
+    }
+}
+
+var onTransactionData = function(data) {
+    const header = document.querySelector('#notificationDropdownContent > .dropdown-header')
+
+    data.lastTransactions.forEach((tr) => {
+        const _d = new Date(tr.ts * 1000)
+        const $a = $(`<a class="dropdown-item" href="#">
+                        <div class="item-thumbnail">
+                          <div class="item-icon">
+                            <img src="/static/img/Qoin-recto-128.png">
+                          </div>
+                        </div>
+                        <div class="item-content">
+                          <h6 class="font-weight-normal">${ tr.amount } Qoins</h6>
+                          <p class="font-weight-light small-text mb-0 text-muted">
+                            ${ formatDate(_d) } 
+                          </p>
+                        </div>
+                      </a>`)
+
+        $a.click(function() {
+            $(this).fadeOut(500, function() {
+                $(this).remove()
+
+                updateDropdown()
+            })
+
+            return false
+        })
+
+        header.insertAdjacentElement('afterend', $a[0])
+    })
+
+    updateDropdown()
+}
+
+/* }}} */
+
+wk.onmessage = function(msg) {
+    var scope = msg.data.scope
 
     if (typeof scope === 'undefined') {
         /* No scope defined, abort */
         return
     }
+
+    switch (scope) {
+      case 'tr':
+        onTransactionData(msg.data.data)
+        break
+      default:
+        console.error('Unhandled scope')
+        return
+    }
 }
 
-/* Init */
 wk.postMessage({ route: 'start', data: {} })
-
-/* <tr style="
- *     height: 0;
- *         border-top: 2px solid #ff00002e;
- *             border-bottom: 2px solid #ff00002e;
- *             "><td colspan="4" style="
- *                 height: 0;
- *                     padding: 2px;
- *                         margin: 0;
- *                             text-align: center;
- *                                 font-style: italic;
- *                                 ">New</td></tr>
- */
