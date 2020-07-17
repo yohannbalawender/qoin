@@ -97,7 +97,12 @@ if __name__ == '__main__':
     try:
         cr = conf['credentials']
 
-        server.authenticate(token, cr['owner'], cr['key'])
+        res, code = server.authenticate(token, cr['owner'], cr['key'])
+
+        if res:
+            logger.info('Miner successfully authenticated')
+        else:
+            logger.error('Fail to authenticate miner')
     except KeyError:
         pass
 

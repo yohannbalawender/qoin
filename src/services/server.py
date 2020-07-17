@@ -658,7 +658,31 @@ class BlockChainService(LeaderService):
         if err:
             return {'message': 'Could not change the service key'}, 400
 
+        # TODO: Key has changed, miner must be delogged
+
         return {'key': new_key}, 200
+
+    # }}}
+    # {{{ Services
+
+    def exposed_auth_service(self, token, owner, key):
+        try:
+            user = self.USERS[owner]
+            found = False
+
+            for s in user.services:
+                if s['key'] == key:
+                    found = True
+                    break
+
+            if not found:
+                return False, 400
+        except KeyError:
+            return False, 400
+
+        return \
+            super(BlockChainService, self).exposed_auth_service(token, owner,
+                                                                key)
 
     # }}}
 

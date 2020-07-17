@@ -156,8 +156,15 @@ def service_refresh_key():
 
     response, code = API.service_refresh_key(session['token'], key)
 
-    return jsonify({'message': response['message'],
-                    'key': response['key']}), code
+    if 'key' in response:
+        for s in session['services']:
+            if s['key'] is key:
+                s['key'] = response['key']
+                break
+
+        return jsonify({'key': response['key']}), code
+    else:
+        return jsonify({'message': response['message']}), code
 
 
 @app.route('/exit', methods=['GET'])

@@ -127,7 +127,7 @@ $(document).ready(() => {
         })
     }
 
-    $('.refresh-key').click(function() {
+    $('.refresh-key').click(function(evt) {
         const key = $(this).data('key')
 
         $.post('/service/refresh-key', { key: key })
@@ -138,6 +138,10 @@ $(document).ready(() => {
 
             $(this).parents('.service-item').find('input').val(response.key)
         })
+
+        evt.stopImmediatePropagation()
+
+        return false
     })
 })
 

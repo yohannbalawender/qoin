@@ -95,13 +95,7 @@ class Follower(Node):
 
         conn = self._get_connection()
 
-        res, error = conn.root.auth_service(token, owner, key)
-
-        if not res:
-            raise BaseException('Failed to authenticate %s: %s'
-                                % (self.node_name, error))
-
-        return res
+        return conn.root.auth_service(token, owner, key)
 
     def _get_connection(self):
         """
@@ -175,6 +169,8 @@ class LeaderService(rpyc.Service):
 
         if service is None:
             return False, 'Could not find follower to forget'
+
+        logger.info('Service %s delogged' % service['data'].__str__())
 
         return True, 200
 
