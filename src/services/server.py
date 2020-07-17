@@ -474,6 +474,19 @@ class BlockChainService(LeaderService):
         else:
             return {'message': 'Unable to process the transaction'}, 400
 
+    def exposed_transaction(self, token, recipient, amount):
+        """
+            Request for a transaction in the blockchain
+        """
+        res = self.is_user_authenticated(token)
+
+        if not res:
+            return {'message': 'Authentication failed'}, 400
+
+        user = res
+
+        return self.handle_transaction(user.email, recipient, amount)
+
     def exposed_history(self, token):
         res = self.is_user_authenticated(token)
 
@@ -626,7 +639,9 @@ class BlockChainService(LeaderService):
         user = res
 
         users = [{'name': self.USERS[k].name, 'email': self.USERS[k].email}
-                 for k in self.USERS if self.USERS[k].email != user.email]
+                 for k in self.USERS
+                 if self.USERS[k].email != user.email
+                 and self.USERS[k].email != MASTER_IDENTIFIER]
 
         return {'users': users}, 200
 

@@ -49,21 +49,16 @@ class BlockchainApi:
     def request_list_users(self, token):
         conn = self.get_connection()
 
-        response = conn.root.list_users(token)
+        response, code = conn.root.list_users(token)
 
-        # By default, exclude master from API
-        if 'users' in response:
-            response['users'] = [u for u in response['users']
-                                 if u['email'] != 'master@intersec.com']
-
-        return response
+        return response, code
 
     def service_refresh_key(self, token, key):
         conn = self.get_connection()
 
-        response = conn.root.service_refresh_key(token, key)
+        response, code = conn.root.service_refresh_key(token, key)
 
-        return response
+        return response, code
 
 # }}}
 # {{{ Website
@@ -84,7 +79,7 @@ def authenticate():
     if login is None or password is None:
         return jsonify({'message': 'Missing request parameters'}), 400
 
-    res = API.request_auth(login, password)
+    res, code = API.request_auth(login, password)
 
     if 'token' in res:
         session['token'] = res['token']
@@ -92,7 +87,7 @@ def authenticate():
         session['name'] = res['name']
         session['services'] = res['services']
 
-    return jsonify({'message': res['message']}), res['code']
+    return jsonify({'message': res['message']}), code
 
 
 @app.route('/account/get', methods=['POST'])
@@ -104,17 +99,17 @@ def get_account():
         return jsonify({'message': 'Unknown session, \
                                     cannot get the account'}), 400
 
-    logger.debug('Ask for history')
-    response = API.request_account(session['token'])
+    logger.debug('Asking for history')
+    response, code = API.request_account(session['token'])
 
     if 'account' in response:
         # Deep copy because the response is not serializable,
         # for an unknown reason
         ac = deepcopy(response['account'])
 
-        return jsonify({'account': ac}), response['code']
+        return jsonify({'account': ac}), code
 
-    return jsonify({'message': response['message']}), response['code']
+    return jsonify({'message': response['message']}), code
 
 
 @app.route('/transaction/new', methods=['POST'])
@@ -132,9 +127,9 @@ def new_transaction():
     # Create transaction for the blockchain
     logger.debug('Ask for new transaction')
 
-    response = API.request_send_coin(session['token'], values)
+    response, code = API.request_send_coin(session['token'], values)
 
-    return jsonify(response['message']), response['code']
+    return jsonify(response['message']), code
 
 
 @app.route('/users/list', methods=['POST'])
@@ -142,14 +137,14 @@ def new_transaction():
 def list_users():
     global API
 
-    response = API.request_list_users(session['token'])
+    response, code = API.request_list_users(session['token'])
 
     if 'users' in response:
         # Not serialize, must be copied...
         users = deepcopy(response['users'])
-        return jsonify(users), response['code']
+        return jsonify(users), code
 
-    return jsonify({'message': response['message']}), response['code']
+    return jsonify({'message': response['message']}), code
 
 
 @app.route('/service/refresh-key', methods=['POST'])
@@ -159,10 +154,10 @@ def service_refresh_key():
 
     key = request.form['key']
 
-    response = API.service_refresh_key(session['token'], key)
+    response, code = API.service_refresh_key(session['token'], key)
 
     return jsonify({'message': response['message'],
-                    'key': response['key']}), response['code']
+                    'key': response['key']}), code
 
 
 @app.route('/exit', methods=['GET'])

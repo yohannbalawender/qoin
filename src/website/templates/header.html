@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <!-- Required meta tags -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta charset="utf-8">
+  <title>Intersec Blockchain</title>
+  <link rel="stylesheet" href="/static/css/themify-icons.css">
+  <link rel="stylesheet" href="/static/css/vendor.bundle.base.css">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/website.css">
+  <link rel="icon" type="image/png" href="/static/img/Qoin-recto-128.png" />
+</head>
+<body>
+  <script>
+    window.BLOCKCHAIN_APP = {
+      'name': '{{ session['name'] }}',
+      'email': '{{ session['email'] }}'
+    };
+  </script>
+
+  <div class="container-scroller">
+    <nav class="navbar col-lg-12 col-12 p-0 fixed-top d-flex flex-row">
+      <div class="text-center navbar-brand-wrapper d-flex align-items-center justify-content-center">
+        <img src="/static/img/Qoin-text.png" width="320">
+      </div>
+      <div class="navbar-menu-wrapper d-flex align-items-center justify-content-end">
+        <ul class="navbar-nav mr-lg-2">
+          <li class="nav-item nav-search d-none d-lg-block">
+            <div>
+              {% if 'token' in session: %}
+                <p>{{ "%s (%s)" % (session['name'], session['email']) }}</p>
+              {% endif %}
+            </div>
+          </li>
+        </ul>
+        <ul class="navbar-nav navbar-nav-right">
+          <li class="nav-item dropdown">
+            <div class="dropdown-menu dropdown-menu-right navbar-dropdown" aria-labelledby="notificationDropdown">
+              <p class="mb-0 font-weight-normal float-left dropdown-header">Notifications</p>
+              <a class="dropdown-item">
+                <div class="item-thumbnail">
+                  <div class="item-icon bg-success">
+                    <i class="ti-info-alt mx-0"></i>
+                  </div>
+                </div>
+                <div class="item-content">
+                  <h6 class="font-weight-normal">Application Error</h6>
+                  <p class="font-weight-light small-text mb-0 text-muted">
+                    Just now
+                  </p>
+                </div>
+              </a>
+              <a class="dropdown-item">
+                <div class="item-thumbnail">
+                  <div class="item-icon bg-warning">
+                    <i class="ti-settings mx-0"></i>
+                  </div>
+                </div>
+                <div class="item-content">
+                  <h6 class="font-weight-normal">Settings</h6>
+                  <p class="font-weight-light small-text mb-0 text-muted">
+                    Private message
+                  </p>
+                </div>
+              </a>
+              <a class="dropdown-item">
+                <div class="item-thumbnail">
+                  <div class="item-icon bg-info">
+                    <i class="ti-user mx-0"></i>
+                  </div>
+                </div>
+                <div class="item-content">
+                  <h6 class="font-weight-normal">New user registration</h6>
+                  <p class="font-weight-light small-text mb-0 text-muted">
+                    2 days ago
+                  </p>
+                </div>
+              </a>
+            </div>
+          </li>
+          <li class="nav-item nav-exit">
+            <a class="nav-link count-indicator" href="/exit" title="exit">
+              <i class="ti-power-off max-0" style="font-size:2.2em"></i>
+            </a>
+          </li>
+        </ul>
+        <button class="navbar-toggler navbar-toggler-right d-lg-none align-self-center" type="button" data-toggle="offcanvas">
+          <span class="ti-view-list"></span>
+        </button>
+      </div>
+    </nav>
+    <div class="container-fluid page-body-wrapper">
+      <nav class="sidebar sidebar-offcanvas" id="sidebar">
+          <ul class="nav">
+          {% if 'token' in session: %}
+            <li class="nav-item">
+              <a class="nav-link" href="/account">
+                <i class="ti-user menu-icon"></i>
+                <span class="menu-title">Account</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/history">
+                <i class="ti-wallet menu-icon"></i>
+                <span class="menu-title">History</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/transaction">
+                <i class="ti-money menu-icon"></i>
+                <span class="menu-title">Transaction</span>
+              </a>
+            </li>
+          {% else %}
+            <li class="nav-item">
+              <a class="nav-link" href="/auth_form">
+                <i class="ti-user menu-icon"></i>
+                <span class="menu-title">Login</span>
+              </a>
+            </li>
+          {% endif %}
+          </ul>
+      </nav>
+      <div class="main-panel">
