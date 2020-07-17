@@ -15,7 +15,7 @@ import threading
 from copy import deepcopy
 
 import rpyc
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 
 from src.utils import load_configuration_file, get_logger_by_name
 from src.services.node import Leader, LeaderService
@@ -491,7 +491,8 @@ class BlockChainService(LeaderService):
         res = self.is_user_authenticated(token)
 
         if not res:
-            return {'message': 'Authentication failed'}, 400
+            return {'message': 'Authentication failed',
+                    'code': 'AUTH_FAIL'}, 400
 
         user = res
 
@@ -501,7 +502,8 @@ class BlockChainService(LeaderService):
         res = self.is_user_authenticated(token)
 
         if not res:
-            return {'message': 'Authentication failed'}, 400
+            return {'message': 'Authentication failed',
+                    'code': 'AUTH_FAIL'}, 400
 
         user = res
 
@@ -513,7 +515,8 @@ class BlockChainService(LeaderService):
         res = self.is_user_authenticated(token)
 
         if not res:
-            return {'message': 'Authentication failed'}, 400
+            return {'message': 'Authentication failed',
+                    'code': 'AUTH_FAIL'}, 400
 
         user = res
 
@@ -525,7 +528,8 @@ class BlockChainService(LeaderService):
         res = self.is_user_authenticated(token)
 
         if not res:
-            return {'message': 'Authentication failed'}, 400
+            return {'message': 'Authentication failed',
+                    'code': 'AUTH_FAIL'}, 400
 
         user = res
 
@@ -579,7 +583,11 @@ class BlockChainService(LeaderService):
 
     def is_user_authenticated(self, token):
         cipher = Fernet(self.SECRET_KEY)
-        ts = cipher.extract_timestamp(token)
+        try:
+            ts = cipher.extract_timestamp(token)
+        except InvalidToken:
+            # Token invalid, to be regenerated
+            return False
         now = int(time.time())
 
         if (now - ts) > DEFAULT_EXPIRY:
@@ -631,7 +639,8 @@ class BlockChainService(LeaderService):
         res = self.is_user_authenticated(token)
 
         if not res:
-            return {'message': 'Authentication failed'}, 400
+            return {'message': 'Authentication failed',
+                    'code': 'AUTH_FAIL'}, 400
 
         user = res
 
@@ -644,7 +653,8 @@ class BlockChainService(LeaderService):
         res = self.is_user_authenticated(token)
 
         if not res:
-            return {'message': 'Authentication failed'}, 400
+            return {'message': 'Authentication failed',
+                    'code': 'AUTH_FAIL'}, 400
 
         user = res
 
@@ -659,7 +669,8 @@ class BlockChainService(LeaderService):
         res = self.is_user_authenticated(token)
 
         if not res:
-            return {'message': 'Authentication failed'}, 400
+            return {'message': 'Authentication failed',
+                    'code': 'AUTH_FAIL'}, 400
 
         service = None
 
@@ -712,7 +723,8 @@ class BlockChainService(LeaderService):
         res = self.is_user_authenticated(token)
 
         if not res:
-            return {'message': 'Authentication failed'}, 400
+            return {'message': 'Authentication failed',
+                    'code': 'AUTH_FAIL'}, 400
 
         user = res
 

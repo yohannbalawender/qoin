@@ -24,6 +24,9 @@ logger = get_logger_by_name('website')
 
 
 class BlockchainApi:
+    def on_authentication_failed(self):
+        session.clear()
+
     def get_connection(self):
         global conf
 
@@ -38,28 +41,53 @@ class BlockchainApi:
     def request_send_coin(self, token, values):
         conn = self.get_connection()
 
-        return conn.root.transaction(token, values['recipient'],
-                                     int(values['amount']))
+        response, code = conn.root.transaction(token, values['recipient'],
+                                               int(values['amount']))
+
+        if 'code' in response and response['code'] == 'AUTH_FAIL':
+            self.on_authentication_failed()
+
+        return response, code
 
     def request_account(self, token):
         conn = self.get_connection()
 
-        return conn.root.get_account(token)
+        response, code = conn.root.get_account(token)
+
+        if 'code' in response and response['code'] == 'AUTH_FAIL':
+            self.on_authentication_failed()
+
+        return response, code
 
     def request_list_users(self, token):
         conn = self.get_connection()
 
-        return conn.root.list_users(token)
+        response, code = conn.root.list_users(token)
+
+        if 'code' in response and response['code'] == 'AUTH_FAIL':
+            self.on_authentication_failed()
+
+        return response, code
 
     def service_refresh_key(self, token, key):
         conn = self.get_connection()
 
-        return conn.root.service_refresh_key(token, key)
+        response = conn.root.service_refresh_key(token, key)
+
+        if 'code' in response and response['code'] == 'AUTH_FAIL':
+            self.on_authentication_failed()
+
+        return response
 
     def get_services_status(self, token):
         conn = self.get_connection()
 
-        return conn.root.get_services_status(token)
+        response = conn.root.get_services_status(token)
+
+        if 'code' in response and response['code'] == 'AUTH_FAIL':
+            self.on_authentication_failed()
+
+        return response
 
 # }}}
 # {{{ Website
@@ -175,10 +203,13 @@ def get_services_status():
 
     response, code = API.get_services_status(session['token'])
 
-    # Not serialized, must be copied...
-    statuses = deepcopy(response['statuses'])
+    if 'statuses' in response:
+        # Not serialized, must be copied...
+        statuses = deepcopy(response['statuses'])
 
-    return jsonify({'statuses': statuses}), code
+        return jsonify({'statuses': statuses}), code
+    else:
+        return jsonify({'message': response['message']}), code
 
 
 @app.route('/exit', methods=['GET'])
