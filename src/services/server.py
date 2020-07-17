@@ -411,6 +411,9 @@ class BlockChainService(LeaderService):
         self.PENDING_BLOCKS[(block.index, block.ts, block.prev_hash)] = \
             pending
 
+        threads_params = []
+
+        # Prepare threads params
         for k in miners_token:
             m = self.SERVICES[k]
             miner_block = deepcopy(block)
@@ -425,8 +428,12 @@ class BlockChainService(LeaderService):
                 except Exception as e:
                     logger.warning('Reward failed: %s' % (e))
 
-            thr = Thread(target=self.send_miner_compute,
-                         args=(k, m, miner_block,))
+            threads_params.append((self.send_miner_compute,
+                                  (k, m, miner_block, )))
+
+        # Fire thread with prepared params
+        for p in threads_params:
+            thr = Thread(target=p[0], args=p[1])
             thr.start()
 
         return True
