@@ -266,3 +266,31 @@ Notification.prototype = {
 var notification = new Notification()
 
 window.notification = notification
+
+/* Worker */
+var wk = new Worker('/static/js/worker.js')
+
+wk.onmessage = function(data) {
+    var scope = data.scope
+
+    if (typeof scope === 'undefined') {
+        /* No scope defined, abort */
+        return
+    }
+}
+
+/* Init */
+wk.postMessage({ route: 'start', data: {} })
+
+/* <tr style="
+ *     height: 0;
+ *         border-top: 2px solid #ff00002e;
+ *             border-bottom: 2px solid #ff00002e;
+ *             "><td colspan="4" style="
+ *                 height: 0;
+ *                     padding: 2px;
+ *                         margin: 0;
+ *                             text-align: center;
+ *                                 font-style: italic;
+ *                                 ">New</td></tr>
+ */
