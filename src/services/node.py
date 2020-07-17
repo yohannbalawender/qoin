@@ -157,8 +157,7 @@ class LeaderService(rpyc.Service):
         data = (host, int(port), role)
         token = self._set_token(data.__str__())
 
-        self.SERVICES[token] = {'data': data, 'connected': True,
-                                'authenticate': False}
+        self.SERVICES[token] = {'data': data, 'authenticate': False}
 
         logger.info('%s registration succeeded on address %s'
                     % (role, (host + ':' + str(port))))
@@ -169,15 +168,25 @@ class LeaderService(rpyc.Service):
         service = self.SERVICES[token]
 
         if service is None:
-            return False, ('Could not find follower to authenticate. Is '
-                           ' is registered ?')
+            return False, 400, ('Could not find follower to authenticate. Is '
+                                'it registered ?')
+
+        # Check if the service is not already registered
+        for k, s in self.SERVICES.iteritems():
+            if not s['authenticate']:
+                continue
+
+            auth = s['authenticate']
+
+            if auth['owner'] == owner and auth['key'] == key:
+                return False, 400, 'Service is already registered'
 
         service['authenticate'] = {'owner': owner, 'key': key}
 
         logger.info('Follower %s successfully authenticated'
                     % (service['data'].__str__()))
 
-        return True, 200
+        return True, 200, ''
 
     def forget(self, token):
         service = self.SERVICES.pop(token)
