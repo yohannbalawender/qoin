@@ -49,16 +49,17 @@ class BlockchainApi:
     def request_list_users(self, token):
         conn = self.get_connection()
 
-        response, code = conn.root.list_users(token)
-
-        return response, code
+        return conn.root.list_users(token)
 
     def service_refresh_key(self, token, key):
         conn = self.get_connection()
 
-        response, code = conn.root.service_refresh_key(token, key)
+        return conn.root.service_refresh_key(token, key)
 
-        return response, code
+    def get_services_status(self, token):
+        conn = self.get_connection()
+
+        return conn.root.get_services_status(token)
 
 # }}}
 # {{{ Website
@@ -140,7 +141,7 @@ def list_users():
     response, code = API.request_list_users(session['token'])
 
     if 'users' in response:
-        # Not serialize, must be copied...
+        # Not serialized, must be copied...
         users = deepcopy(response['users'])
         return jsonify(users), code
 
@@ -165,6 +166,19 @@ def service_refresh_key():
         return jsonify({'key': response['key']}), code
     else:
         return jsonify({'message': response['message']}), code
+
+
+@app.route('/service/status', methods=['POST'])
+@cross_origin()
+def get_services_status():
+    global API
+
+    response, code = API.get_services_status(session['token'])
+
+    # Not serialized, must be copied...
+    statuses = deepcopy(response['statuses'])
+
+    return jsonify({'statuses': statuses}), code
 
 
 @app.route('/exit', methods=['GET'])

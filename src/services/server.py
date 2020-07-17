@@ -694,6 +694,33 @@ class BlockChainService(LeaderService):
             super(BlockChainService, self).exposed_auth_service(token, owner,
                                                                 key)
 
+    def exposed_get_services_status(self, token):
+        """
+            Return the list of declared services of the user
+            with the status.
+        """
+        res = self.is_user_authenticated(token)
+
+        if not res:
+            return {'message': 'Authentication failed'}, 400
+
+        user = res
+
+        services = []
+
+        for s in user.services:
+            uk = s['key']
+            status = 'sleeping'
+            for k in self.SERVICES:
+                auth = self.SERVICES[k]['authenticate']
+                if auth is not False and auth['key'] == uk:
+                    status = 'active'
+                    break
+
+            services.append({'key': uk, 'status': status})
+
+        return {'statuses': services}, 200
+
     # }}}
 
 

@@ -125,6 +125,16 @@ $(document).ready(() => {
                 $recipient.append(html)
             })
         })
+
+        $.post('/service/status', { })
+        .done((response) => {
+            response.statuses.forEach((s) => {
+                const $el = $(`.service-item#${ s.key }`)
+
+                $el.find('.service-status-up').toggleClass('hidden', s.status !== 'active')
+                $el.find('.service-status-down').toggleClass('hidden', s.status !== 'sleeping')
+            })
+        })
     }
 
     $('.refresh-key').click(function(evt) {

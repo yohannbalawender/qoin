@@ -41,7 +41,7 @@
                 <div class="form-group">
                   {% if 'services' in session %}
                     {% for service in session['services'] %}
-                      <div class="service-item">
+                      <div class="service-item" id="{{ service['key'] }}">
                         <label>Key</label>
 
                         <div class="input-group form-group">
@@ -62,12 +62,9 @@
                         </div>
 
                         <div class="form-group">
-                          <label>Status:</label>
-                          {% if 'active' in service %}
-                            <span title="Up and running" class="ti-check"></span>
-                          {% else %}
-                            <span title="Not running" class="ti-close"></span>
-                          {% endif %}
+                          <label>Status</label>
+                            <span title="Up and running" class="service-status-up hidden ti-check"></span>
+                            <span title="Not running" class="service-status-down ti-close"></span>
                         </div>
                       </div>
                     {% endfor %}
