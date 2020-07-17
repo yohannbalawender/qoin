@@ -537,6 +537,24 @@ class BlockChainService(LeaderService):
 
         return {'balance': balance}, 200
 
+    def exposed_get_last_trs(self, token, ts):
+        res = self.is_user_authenticated(token)
+
+        if not res:
+            return {'message': 'Authentication failed',
+                    'code': 'AUTH_FAIL'}, 400
+
+        user = res
+
+        lastTransactions = []
+        history = self.get_account_history(user.email)['history']
+
+        for tr_ts, tr in history.iteritems():
+            if tr_ts >= ts:
+                lastTransactions.append(tr)
+
+        return {'lastTransactions': lastTransactions}, 200
+
     # }}}
     # Users {{{
 

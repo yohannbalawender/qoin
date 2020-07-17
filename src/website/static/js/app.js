@@ -78,7 +78,9 @@ $(document).ready(() => {
                 return
             }
 
-            $tbody.append('<tr><td>' + formatDate(date) + '</td><td>'+entity+'</td><td>'+label+'</td><td class="'+amountTdCls+'">' + amount + ' Q ' + amountStr  + '</td></tr>')
+            const ts = Math.round(date.getTime() / 1000)
+
+            $tbody.append('<tr><td class="tr-date" data-ts="' + ts + '">' + formatDate(date) + '</td><td>'+entity+'</td><td>'+label+'</td><td class="'+amountTdCls+'">' + amount + ' Q ' + amountStr  + '</td></tr>')
         })
     })
 

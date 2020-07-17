@@ -7,6 +7,7 @@ from flask_session import Session
 from flask_cors import CORS, cross_origin
 from copy import deepcopy
 import socket
+import json
 
 import rpyc
 
@@ -53,6 +54,16 @@ class BlockchainApi:
         conn = self.get_connection()
 
         response, code = conn.root.get_account(token)
+
+        if 'code' in response and response['code'] == 'AUTH_FAIL':
+            self.on_authentication_failed()
+
+        return response, code
+
+    def get_last_trs(self, token, ts):
+        conn = self.get_connection()
+
+        response, code = conn.root.get_last_trs(token, ts)
 
         if 'code' in response and response['code'] == 'AUTH_FAIL':
             self.on_authentication_failed()
@@ -210,6 +221,30 @@ def get_services_status():
         return jsonify({'statuses': statuses}), code
     else:
         return jsonify({'message': response['message']}), code
+
+
+@app.route('/transaction/last', methods=['POST'])
+def get_last_transaction():
+    global API
+
+    if 'token' not in session:
+        return jsonify({'message': 'Unknown session, \
+                                    cannot get the account'}), 400
+
+    _str = request.get_data()
+    _json = json.loads(_str)
+
+    since = _json['since']
+
+    if not since:
+        return jsonify({'message': 'Missing "since" parameter'}), 400
+
+    response, code = API.get_last_trs(session['token'], since)
+
+    # Not serialized, must be copied...
+    last_transactions = deepcopy(response['lastTransactions'])
+
+    return jsonify({'lastTransactions': last_transactions}), code
 
 
 @app.route('/exit', methods=['GET'])
