@@ -361,7 +361,6 @@ class BlockChainService(LeaderService):
                 logger.error('No miner service available to procede the \
                               transaction. Transaction is lost')
                 self.PENDING_BLOCKS.pop(key)
-                return False
 
             self.forget(token)
             return
