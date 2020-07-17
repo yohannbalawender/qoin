@@ -245,10 +245,13 @@ def get_last_transaction():
 
     response, code = API.get_last_trs(session['token'], since)
 
-    # Not serialized, must be copied...
-    last_transactions = deepcopy(response['lastTransactions'])
+    if 'lastTransactions' in response:
+        # Not serialized, must be copied...
+        last_transactions = deepcopy(response['lastTransactions'])
 
-    return jsonify({'lastTransactions': last_transactions}), code
+        return jsonify({'lastTransactions': last_transactions}), code
+    else:
+        return jsonify({'message': response['message']}), code
 
 
 @app.route('/exit', methods=['GET'])

@@ -36,14 +36,16 @@
           </li>
         </ul>
         <ul class="navbar-nav navbar-nav-right">
-          <li class="nav-item dropdown">
-            <a class="nav-link count-indicator dropdown-toggle" id="notificationDropdown" href="#" data-toggle="dropdown">
-              <i class="ti-bell max-0" style="font-size:2.2em"></i>
-            </a>
-            <div class="dropdown-menu dropdown-menu-right navbar-dropdown" aria-labelledby="notificationDropdown" id="notificationDropdownContent">
-              <p class="mb-0 font-weight-normal float-left dropdown-header">Notifications</p>
-            </div>
-          </li>
+          {% if 'token' in session: %}
+            <li class="nav-item dropdown">
+              <a class="nav-link count-indicator dropdown-toggle" id="notificationDropdown" href="#" data-toggle="dropdown">
+                <i class="ti-bell max-0" style="font-size:2.2em"></i>
+              </a>
+              <div class="dropdown-menu dropdown-menu-right navbar-dropdown" aria-labelledby="notificationDropdown" id="notificationDropdownContent">
+                <p class="mb-0 font-weight-normal float-left dropdown-header">Notifications</p>
+              </div>
+            </li>
+          {% endif %}
           <li class="nav-item nav-exit">
             <a class="nav-link count-indicator" href="/exit" title="exit">
               <i class="ti-power-off max-0" style="font-size:2.2em"></i>
