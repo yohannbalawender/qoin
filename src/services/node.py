@@ -109,6 +109,21 @@ class Follower(Node):
             raise Exception('Unable to connect to the leader')
 
 
+class FollowerService(rpyc.Service):
+    def on_delog(self):
+        """
+            Child should override this method
+        """
+        logger.info('Follower on delogging called')
+
+    def exposed_delog(self):
+        logger.info('Leader has asked to delog. Good bye !')
+
+        self.on_delog()
+
+        return True, 200
+
+
 class Leader(Node):
     node_name = 'Leader'
 
@@ -170,7 +185,18 @@ class LeaderService(rpyc.Service):
         if service is None:
             return False, 'Could not find follower to forget'
 
-        logger.info('Service %s delogged' % service['data'].__str__())
+        try:
+            host = service['data'][0]
+            port = service['data'][1]
+
+            conn = rpyc.connect(host, port)
+
+            conn.root.delog()
+
+            logger.info('Service %s delogged' % service['data'].__str__())
+        except socket.error:
+            # Could not connect to the follower
+            pass
 
         return True, 200
 

@@ -628,7 +628,7 @@ class BlockChainService(LeaderService):
         service = user.declare_service(role)
 
         return {'message': 'Service declared successfully',
-                'serviceKey':  service['key']}, 200
+                'serviceKey': service['key']}, 200
 
     def exposed_list_users(self, token):
         res = self.is_user_authenticated(token)
@@ -651,14 +651,24 @@ class BlockChainService(LeaderService):
         if not res:
             return {'message': 'Authentication failed'}, 400
 
+        service = None
+
+        for k in self.SERVICES:
+            auth = self.SERVICES[k]['authenticate']
+            if auth is not False and auth['key'] == key:
+                service = k
+                break
+
         user = res
 
         new_key, err = user.service_refresh_key(key)
 
+        # Unlog connected service with old key
+        if service is not None:
+            self.forget(service)
+
         if err:
             return {'message': 'Could not change the service key'}, 400
-
-        # TODO: Key has changed, miner must be delogged
 
         return {'key': new_key}, 200
 

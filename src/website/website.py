@@ -158,7 +158,7 @@ def service_refresh_key():
 
     if 'key' in response:
         for s in session['services']:
-            if s['key'] is key:
+            if s['key'] == key:
                 s['key'] = response['key']
                 break
 

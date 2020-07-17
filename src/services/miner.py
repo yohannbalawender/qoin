@@ -4,10 +4,8 @@ import base64
 import socket
 from argparse import ArgumentParser
 
-import rpyc
-
 from src.utils import load_configuration_file, get_logger_by_name
-from src.services.node import Follower
+from src.services.node import Follower, FollowerService
 from src.blockchain import Block, Transaction
 
 # {{{ Logger
@@ -50,7 +48,10 @@ class MinerServer(Follower):
         self.credentials = (credentials['owner'], credentials['key'])
 
 
-class MinerClient(rpyc.Service):
+class MinerClient(FollowerService):
+    def on_delog(self):
+        logger.warning('Miner delogged, please reconnect')
+
     def exposed_compute_hash(self, s_block):
         logger.debug('Computing block hash...')
 
