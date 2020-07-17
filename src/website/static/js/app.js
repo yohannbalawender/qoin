@@ -117,7 +117,7 @@ $(document).ready(() => {
         .done((users) => {
             const $recipient = $('#recipient')
 
-            $('#submit-tr').attr('disabled', users.length)
+            $('#submit-tr').attr('disabled', !users.length)
 
             users.forEach((u) => {
                 const html = `<option value="${ u.email }">${ u.name } (${ u.email })</option>`

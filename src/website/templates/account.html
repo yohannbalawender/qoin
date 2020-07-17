@@ -32,41 +32,54 @@
           </div>
         </div>
       </div>
-      <div class="col-md-12 grid-margin stretch-card">
-        <div class="card">
-          <div class="card-body">
-            <h4 class="card-title">Declared services</h4>
-            <form>
-              <div class="form-group">
-                {% if 'services' in session %}
-                  {% for service in session['services'] %}
-                    <div class="service-item">
-                      <label>Key</label>
+      {% if 'token' in session: %}
+        <div class="col-md-12 grid-margin stretch-card">
+          <div class="card">
+            <div class="card-body">
+              <h4 class="card-title">Declared services</h4>
+              <form>
+                <div class="form-group">
+                  {% if 'services' in session %}
+                    {% for service in session['services'] %}
+                      <div class="service-item">
+                        <label>Key</label>
 
-                      <div class="input-group form-group">
-                        <input type="text" class="form-control" aria-label="Key" value="{{ service['key'] }}" disabled>
-                        <div class="input-group-append">
-                         <span class="input-group-text bg-primary">
-                             <a href="#" class="ti-reload text-white refresh-key" data-key="{{ service['key'] }}"></a>
-                         </span>
+                        <div class="input-group form-group">
+                          <input type="text" class="form-control" aria-label="Key" value="{{ service['key'] }}" disabled>
+                          <div class="input-group-append">
+                           <span class="input-group-text bg-primary">
+                               <a href="#" class="ti-reload text-white refresh-key" data-key="{{ service['key'] }}"></a>
+                           </span>
+                          </div>
+                        </div>
+
+                        <div class="form-group">
+                          <label>Role</label>
+                          <select class="form-control" disabled>
+                            {{ option("MINER", "Miner", service['role']) }}
+                            {{ option("QWINNER", "Qwinner", service['role']) }}
+                          </select>
+                        </div>
+
+                        <div class="form-group">
+                          <label>Status:</label>
+                          {% if 'active' in service %}
+                            <span title="Up and running" class="ti-check"></span>
+                          {% else %}
+                            <span title="Not running" class="ti-close"></span>
+                          {% endif %}
                         </div>
                       </div>
-
-                      <label>Role</label>
-                      <select class="form-control" disabled>
-                        {{ option("MINER", "Miner", service['role']) }}
-                        {{ option("QWINNER", "Qwinner", service['role']) }}
-                      </select>
-                    </div>
-                  {% endfor %}
-                {% else %}
-                  <p>No service declared</p>
-                {% endif %}
-              </div>
-            </form>
+                    {% endfor %}
+                  {% else %}
+                    <p>No service declared</p>
+                  {% endif %}
+                </div>
+              </form>
+            </div>
           </div>
         </div>
-      </div>
+      {% endif %}
     </div>
   </div>
 </div>
