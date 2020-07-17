@@ -158,6 +158,9 @@ class User(object):
 
         return new_key, None
 
+    def identity(self):
+        return '%s (%s)' % (self.name, self.email)
+
     def __str__(self):
         return 'User: %s [%s]\n      pubKey:%s\n      privKey:#######' %\
                 (self.email, self.name, base64.b64encode(self.public_key))

@@ -11,7 +11,7 @@ import time
 from argparse import ArgumentParser
 import hashlib
 from collections import OrderedDict
-import threading
+from threading import Lock, Thread
 from copy import deepcopy
 
 import rpyc
@@ -327,25 +327,43 @@ class BlockChainService(LeaderService):
         s_block = response['result']['block']
         key = (s_block['index'], s_block['ts'], s_block['prev_hash'])
         if key in self.PENDING_BLOCKS:
-            pending = self.PENDING_BLOCKS.pop(key, None)
+            pending = self.PENDING_BLOCKS[key]
+        else:
+            logger.debug('Bad luck %s, block already solved' % miner['data'].__str__())
+            return
 
+        lock = pending['lock']
+
+        lock.acquire()
+        logger.debug('Lock acquire for miner %s' % miner['data'].__str__())
+
+        # Double check that the pending still exists
+        if key in self.PENDING_BLOCKS:
             miner_key = (miner['data'][0], miner['data'][1])
-            block = pending[miner_key]
+            block = pending['miners'][miner_key]
 
             if not block.check_hash_validity(s_block['nonce'],
                                              s_block['hash']):
                 logger.warning('Miner %s sent an invalid hash' %
                                (miner['data'].__str__()))
-                self.PENDING_BLOCKS[key] = pending
+                lock.release()
+                logger.debug('Lock release for miner %s' % miner['data'].__str__())
                 return
 
             # Set hash
             block.set_hash(s_block['nonce'], s_block['hash'])
             logger.info('Solved by miner %s, good job ! ' %
                         (miner['data'].__str__()))
+
+            # Add the block, release the pending block
             self.BLOCK_CHAIN.append(block)
+            self.PENDING_BLOCKS.pop(key)
         else:
-            logger.debug('Bad luck, block already solved')
+            logger.debug('Bad luck %s, block already solved' % miner['data'].__str__())
+
+        # Release the lock
+        lock.release()
+        logger.debug('Lock release for miner %s' % miner['data'].__str__())
 
     def send_miner_compute(self, token, miner, block):
         try:
@@ -357,7 +375,7 @@ class BlockChainService(LeaderService):
             key = (block.index, block.ts, block.prev_hash)
             pending = self.PENDING_BLOCKS[key]
             miner_key = (miner['data'][0], miner['data'][1])
-            pending.pop(miner_key)
+            pending['miners'].pop(miner_key)
 
             if len(pending) == 0:
                 logger.error('No miner service available to procede the \
@@ -389,15 +407,15 @@ class BlockChainService(LeaderService):
                           transaction. Transaction is lost')
             return False
 
-        pending_block = {}
+        pending = {'miners': {}, 'lock': Lock()}
         self.PENDING_BLOCKS[(block.index, block.ts, block.prev_hash)] = \
-            pending_block
+            pending
 
         for k in miners_token:
             m = self.SERVICES[k]
             miner_block = deepcopy(block)
 
-            pending_block[(m['data'][0], m['data'][1])] = miner_block
+            pending['miners'][(m['data'][0], m['data'][1])] = miner_block
 
             # Owner and key declared
             if m['authenticate'] is not False:
@@ -407,8 +425,8 @@ class BlockChainService(LeaderService):
                 except Exception as e:
                     logger.warning('Reward failed: %s' % (e))
 
-            thr = threading.Thread(target=self.send_miner_compute,
-                                   args=(k, m, miner_block,))
+            thr = Thread(target=self.send_miner_compute,
+                         args=(k, m, miner_block,))
             thr.start()
 
         return True
@@ -425,7 +443,7 @@ class BlockChainService(LeaderService):
             return tx
         else:
             logger.info('Sender %s hits the limit number of allowed '
-                        'transaction')
+                        'transaction' % sender.identity())
             return False
 
     def add_reward(self, miner, block):
@@ -460,7 +478,7 @@ class BlockChainService(LeaderService):
         last_block = self.BLOCK_CHAIN[len(self.BLOCK_CHAIN) - 1]
         tx = self.create_transaction(user_from, user_to, amount, label)
 
-        if tx is None:
+        if not tx:
             return False
 
         block = Block(last_block.index + 1, time.time(),
