@@ -351,8 +351,18 @@ class BlockChainService(LeaderService):
         except Exception:
             logger.warning('Connection lost with miner %s' %
                            (miner['data'].__str__()))
+
             key = (block.index, block.ts, block.prev_hash)
-            self.PENDING_BLOCKS.pop(key)
+            pending = self.PENDING_BLOCKS[key]
+            miner_key = (miner['data'][0], miner['data'][1])
+            pending.pop(miner_key)
+
+            if len(pending) == 0:
+                logger.error('No miner service available to procede the \
+                              transaction. Transaction is lost')
+                self.PENDING_BLOCKS.pop(key)
+                return False
+
             self.forget(token)
             return
 
