@@ -1,0 +1,11 @@
+{
+    "port": 5002,
+    "leader": {
+        "ip": "127.0.0.1",
+        "port": 5001
+    },
+    "credentials": {
+        "owner": "blockchain-client@qoin.com",
+        "key": "S1kR3T"
+    }
+}
