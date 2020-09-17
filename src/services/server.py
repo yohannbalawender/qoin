@@ -24,6 +24,7 @@ from src.users import User, AuthenticationError
 
 MASTER_IDENTIFIER = 'blockchain-master'
 SECRET_KEY = None
+# Authenticated for 3 months by default
 DEFAULT_EXPIRY = 86400 * 90
 
 # Logger {{{
@@ -262,6 +263,10 @@ class BlockChainService(LeaderService):
         self.USERS[MASTER_IDENTIFIER] = master_user
 
     def _create_genesis_block(self, conf):
+        """
+            Create the very first genesis block. Essential to provide
+            the stockpile qoins.
+        """
         master_user = self.USERS[MASTER_IDENTIFIER]
         tx = Transaction(master_user,
                          master_user,
@@ -273,14 +278,14 @@ class BlockChainService(LeaderService):
 
     def set_blockchain(self, BLOCK_CHAIN):
         """
-            Store the blockchain reference
+            Store the blockchain reference.
         """
 
         self.BLOCK_CHAIN = BLOCK_CHAIN
 
     def get_user_from_public_key(self, pub):
         """
-            Get a user by its public key
+            Get a user by its public key.
         """
         for k in self.USERS:
             if self.USERS[k].public_key == pub:
@@ -289,7 +294,7 @@ class BlockChainService(LeaderService):
 
     def get_account_history(self, email):
         """
-            Get the account history by email author
+            Get the account history by email author.
         """
         balance = 0
         history = OrderedDict()
@@ -443,6 +448,9 @@ class BlockChainService(LeaderService):
 
     def create_transaction(self, sender, receiver, amount,
                            label='Transaction'):
+        """
+            Create a new transaction.
+        """
         tx = Transaction(sender, receiver, amount, time.time(), label)
 
         if sender.has_allowed_transaction():
@@ -455,7 +463,8 @@ class BlockChainService(LeaderService):
 
     def add_reward(self, miner, block):
         """
-            Add a reward, if possible, do not stop the transaction
+            Add a reward if possible, and do not stop the transaction
+            if it fails.
         """
         owner = miner['authenticate']['owner']
 
@@ -482,6 +491,9 @@ class BlockChainService(LeaderService):
         block.tx_list.append(tr)
 
     def send_coin(self, user_from, user_to, amount, label='Transaction'):
+        """
+            Send amount of qoins from a sender to a recipient.
+        """
         last_block = self.BLOCK_CHAIN[len(self.BLOCK_CHAIN) - 1]
         tx = self.create_transaction(user_from, user_to, amount, label)
 
@@ -525,6 +537,9 @@ class BlockChainService(LeaderService):
         return self.handle_transaction(user.email, recipient, amount)
 
     def exposed_history(self, token):
+        """
+            Retrieve a user account history.
+        """
         res = self.is_user_authenticated(token)
 
         if not res:
@@ -538,6 +553,9 @@ class BlockChainService(LeaderService):
         return {'history': history}, 200
 
     def exposed_get_account(self, token):
+        """
+            Retrieve a user account informations.
+        """
         res = self.is_user_authenticated(token)
 
         if not res:
@@ -551,6 +569,9 @@ class BlockChainService(LeaderService):
         return {'account': account}, 200
 
     def exposed_get_balance(self, token):
+        """
+            Get the balance of a user.
+        """
         res = self.is_user_authenticated(token)
 
         if not res:
@@ -564,6 +585,9 @@ class BlockChainService(LeaderService):
         return {'balance': balance}, 200
 
     def exposed_get_last_trs(self, token, ts):
+        """
+            Retrieve the last transactions of a user.
+        """
         res = self.is_user_authenticated(token)
 
         if not res:
@@ -586,7 +610,7 @@ class BlockChainService(LeaderService):
 
     def exposed_authenticate_user(self, email, passwd):
         """
-            Allow to authenticate as a user of the blockchain
+            Allow to authenticate as a user of the blockchain.
         """
         user = None
 
@@ -626,6 +650,10 @@ class BlockChainService(LeaderService):
         return priv == self.USERS[MASTER_IDENTIFIER].private_key
 
     def is_user_authenticated(self, token):
+        """
+            Check if the user is authenticated. Check the token validity
+            and expiration.
+        """
         cipher = Fernet(self.SECRET_KEY)
         try:
             ts = cipher.extract_timestamp(token)
@@ -663,6 +691,9 @@ class BlockChainService(LeaderService):
         return False
 
     def exposed_master_create_user(self, priv, *args):
+        """
+            A master command to create a new user.
+        """
         res = self._authenticate_master(priv)
 
         if not res:
@@ -674,12 +705,19 @@ class BlockChainService(LeaderService):
             return {'message': 'Failed to create the user'}, 400
 
     def exposed_master_credit(self, priv, recipient, amount):
+        """
+            A master command to credit amount from the master user to the
+            recipient.
+        """
         if priv != self.USERS[MASTER_IDENTIFIER].private_key:
             return {'message': 'Authentication failed'}, 400
 
         return self.handle_transaction(MASTER_IDENTIFIER, recipient, amount)
 
     def exposed_declare_service(self, token, role):
+        """
+            Declare a new service for a user.
+        """
         res = self.is_user_authenticated(token)
 
         if not res:
@@ -694,6 +732,9 @@ class BlockChainService(LeaderService):
                 'serviceKey': service['key']}, 200
 
     def exposed_list_users(self, token):
+        """
+            Return the list of registered users.
+        """
         res = self.is_user_authenticated(token)
 
         if not res:
@@ -710,6 +751,9 @@ class BlockChainService(LeaderService):
         return {'users': users}, 200
 
     def exposed_service_refresh_key(self, token, key):
+        """
+            Refresh a service key.
+        """
         res = self.is_user_authenticated(token)
 
         if not res:
@@ -741,6 +785,11 @@ class BlockChainService(LeaderService):
     # {{{ Services
 
     def exposed_auth_service(self, token, owner, key):
+        """
+            Authenticate a service against the server.
+            The service must belong to a registered user, and must be
+            registered *before* on the server.
+        """
         try:
             user = self.USERS[owner]
             found = False

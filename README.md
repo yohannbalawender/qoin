@@ -6,7 +6,7 @@ Simple implementation of the blockchain
 
 ### Server
 
-An example of configuration file is provided under `etc` directory.
+An example of configuration file is provided under `src/etc` directory, `server.conf.example`.
 
 All fields are required, and a secret key must be generated. You can use openssl library to generate it.
 
