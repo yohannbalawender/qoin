@@ -10,7 +10,7 @@ An example of configuration file is provided under `src/etc` directory, `server.
 
 All fields are required, and a secret key must be generated. You can use openssl library to generate it.
 
-`openssl rand -hex 32`
+`openssl rand -hex 16`
 
 ### Website
 
@@ -18,7 +18,7 @@ An example of configuration file is provided under `etc` directory.
 
 Like the server parameters, all fields are required, and a diffrent secret key must be generated. You can use openssl library to generate it.
 
-`openssl rand -hex 32`
+`openssl rand -hex 16`
 
 ### Miner
 

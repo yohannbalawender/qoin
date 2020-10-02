@@ -254,7 +254,14 @@ class BlockChainService(LeaderService):
             self.BLOCK_CHAIN.append(self._create_genesis_block(conf))
             logger.info('Genesis block generated')
 
-        self.SECRET_KEY = conf['secretKey'].encode('ascii')
+        plain_secret_key = conf['secretKey'].encode('ascii')
+        self.SECRET_KEY = base64.urlsafe_b64encode(plain_secret_key)
+
+        try:
+            Fernet(self.SECRET_KEY)
+        except ValueError:
+            raise Exception('Key is invalid, couldn\'t start the blockchain '
+                            'service')
 
     def _create_master_user(self, conf):
         master_user = User('master', MASTER_IDENTIFIER,
