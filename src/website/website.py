@@ -31,8 +31,8 @@ class BlockchainApi:
     def get_connection(self):
         global conf
 
-        return rpyc.connect(host=conf['leader']['ip'],
-                            port=conf['leader']['port'])
+        return rpyc.connect(host=conf['server']['ip'],
+                            port=conf['server']['port'])
 
     def request_auth(self, email, passwd):
         conn = self.get_connection()
