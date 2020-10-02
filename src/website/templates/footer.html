@@ -14,7 +14,11 @@
   <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
   <script src="{{ url_for('static', filename='js/underscore.js') }}"></script>
   <script type="text/javascript" src="{{ url_for('static', filename='js/jquery.js') }}"></script>
-  <script type="text/javascript" src="{{ url_for('static', filename='js/app.js') }}"></script>
+  {% if 'token' in session %}
+    <script type="text/javascript" src="{{ url_for('static', filename='js/app.js') }}"></script>
+  {% else %}
+    <script type="text/javascript" src="{{ url_for('static', filename='js/auth.js') }}"></script>
+  {% endif %}
 </body>
 
 </html>
