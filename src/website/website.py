@@ -13,7 +13,7 @@ import rpyc
 
 from src.utils import load_configuration_file, get_logger_by_name
 
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='/src/website/static')
 CORS(app, supports_credentials=True)
 
 # {{{ Logger

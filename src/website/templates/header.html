@@ -6,11 +6,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
   <meta charset="utf-8">
   <title>Qoin blockchain (｡◕‿‿◕｡)</title>
-  <link rel="stylesheet" href="/static/css/themify-icons.css">
-  <link rel="stylesheet" href="/static/css/vendor.bundle.base.css">
-  <link rel="stylesheet" href="/static/css/style.css">
-  <link rel="stylesheet" href="/static/css/website.css">
-  <link rel="icon" type="image/png" href="/static/img/Qoin-recto-128.png" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/themify-icons.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/vendor.bundle.base.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/website.css') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/Qoin-recto-128.png') }}" />
 </head>
 <body>
   <script>
@@ -23,7 +23,7 @@
   <div class="container-scroller">
     <nav class="navbar col-lg-12 col-12 p-0 fixed-top d-flex flex-row">
       <div class="text-center navbar-brand-wrapper d-flex align-items-center justify-content-center">
-        <img src="/static/img/Qoin-text.png" width="320">
+          <img src="{{ url_for('static', filename='img/Qoin-text.png') }}" width="320">
       </div>
       <div class="navbar-menu-wrapper d-flex align-items-center justify-content-end">
         <ul class="navbar-nav mr-lg-2">

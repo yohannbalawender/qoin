@@ -273,7 +273,7 @@ var notification = new Notification()
 window.notification = notification
 
 /* Worker */
-var wk = new Worker('/static/js/worker.js')
+var wk = new Worker('/src/website/static/js/worker.js')
 
 /* {{{ Worker scope */
 
