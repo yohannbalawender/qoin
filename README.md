@@ -20,6 +20,10 @@ Like the server parameters, all fields are required, and a diffrent secret key m
 
 `openssl rand -hex 16`
 
+You also need NPM to install javascript dependencies.
+
+`npm install`
+
 ### Miner
 
 An example of configuration file is provided under `etc` directory.
