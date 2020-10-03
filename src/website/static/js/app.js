@@ -276,7 +276,7 @@ var onTransactionData = function(data) {
         const $a = $(`<a class="dropdown-item" href="#">
                         <div class="item-thumbnail">
                           <div class="item-icon">
-                            <img src="/static/img/Qoin-recto-128.png">
+                            <img src="/src/website/static/img/Qoin-recto-128.png">
                           </div>
                         </div>
                         <div class="item-content">
