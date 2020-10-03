@@ -389,7 +389,7 @@ class BlockChainService(LeaderService):
             miner_key = (miner['data'][0], miner['data'][1])
             pending['miners'].pop(miner_key)
 
-            if len(pending) == 0:
+            if len(pending['miners']) == 0:
                 logger.error('No miner service available to procede the \
                               transaction. Transaction is lost')
                 self.PENDING_BLOCKS.pop(key)
