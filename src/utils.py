@@ -7,7 +7,25 @@ import random
 import string
 import logging
 
+# Logging {{{
+
 FORMAT = '%(asctime)s %(levelname)s %(message)s'
+
+BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = range(30, 38)
+
+RESET_SEQ = "\033[0m"
+COLOR_SEQ = "\033[%d;21m"
+BOLD_RED_SEQ = "\033[1;31m"
+
+MAPPING = {
+    'DEBUG': (COLOR_SEQ % BLUE) + FORMAT + RESET_SEQ,
+    'INFO': (COLOR_SEQ % GREEN) + FORMAT + RESET_SEQ,
+    'WARNING': (COLOR_SEQ % YELLOW) + FORMAT + RESET_SEQ,
+    'ERROR': (COLOR_SEQ % RED) + FORMAT + RESET_SEQ,
+    'CRITICAL': BOLD_RED_SEQ + FORMAT + RESET_SEQ
+}
+
+# }}}
 
 
 def load_configuration_file(conf_filepath):
@@ -29,13 +47,23 @@ def random_hex(length):
     return ''.join(random.choice(string.hexdigits) for i in range(length))
 
 
+class CustomFormatter(logging.Formatter):
+    """Logging Formatter to add colors and count warning / errors"""
+
+    def format(self, record):
+        levelname = record.levelname
+        fmt = MAPPING[levelname]
+        formatter = logging.Formatter(fmt)
+
+        return formatter.format(record)
+
+
 def get_logger_by_name(name=None):
-    formatter = logging.Formatter(FORMAT)
     file_handler = logging.FileHandler('log/blockchain.log')
-    file_handler.setFormatter(formatter)
+    file_handler.setFormatter(CustomFormatter())
 
     stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
+    stream_handler.setFormatter(CustomFormatter())
 
     logger = logging.getLogger(name)
     logger.addHandler(file_handler)
