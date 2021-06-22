@@ -12,6 +12,6 @@
   "dependencies": {
     "jquery": "^3.5.0",
     "spectre.css": "^0.5.8",
-    "underscore": "^1.11.0"
+    "underscore": "^1.12.1"
   }
 }
